@@ -7,36 +7,42 @@
     "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": 
-[
-  "visionindex",
-  "facial recognition",
-  "CCTV analysis",
-  "presence tracking",
-  "post-event detection",
-  "zone-based tracking",
-  "AI surveillance",
-  "FYP backend",
-  "computer vision",
-  "restapi backend",
-  "deep learning",
-  "person re-identification",
-  "YOLOv8",
-  "DeepFace",
-  "DeepSort",
-  "surveillance analytics",
-  "Air University",
-  "FYP"
-],
-  "authors": [{
-    "name": "Sabbas Ahmad",
-    "email": "sabbas.ahm@gmail.com"
-  }, 
-  {
-    "name": "Syed Wasif Ali Shah",
-    "email": "shahwasif2003@gmail.com"
-  }
-],
+  "keywords": [
+    "visionindex",
+    "facial recognition",
+    "CCTV analysis",
+    "presence tracking",
+    "post-event detection",
+    "zone-based tracking",
+    "AI surveillance",
+    "FYP backend",
+    "computer vision",
+    "restapi backend",
+    "deep learning",
+    "person re-identification",
+    "YOLOv8",
+    "DeepFace",
+    "DeepSort",
+    "surveillance analytics",
+    "Air University",
+    "FYP"
+  ],
+  "authors": [
+    {
+      "name": "Sabbas Ahmad",
+      "email": "sabbas.ahm@gmail.com"
+    },
+    {
+      "name": "Syed Wasif Ali Shah",
+      "email": "shahwasif2003@gmail.com"
+    }
+  ],
   "license": "MIT",
-  "description": "Backend for VisionIndex – a post-event facial recognition system that analyzes CCTV recordings to track and log individual presence across institutional zones for attendance and security auditing."
+  "description": "Backend for VisionIndex – a post-event facial recognition system that analyzes CCTV recordings to track and log individual presence across institutional zones for attendance and security auditing.",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "mongoose": "^8.17.0"
+  }
 }
