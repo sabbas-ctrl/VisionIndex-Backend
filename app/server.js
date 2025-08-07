@@ -2,14 +2,17 @@ import dotenv from 'dotenv';
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
+import helmet from 'helmet';
+import authRoutes from './routes/authRoutes.js';
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(helmet())
 
-// Connect to DB
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -20,6 +23,8 @@ mongoose.connect(process.env.MONGO_URI, {
 });
 
 // Routes
+app.use('/auth', authRoutes);
+
 app.get('/', (req, res) => {
   res.send('VisionIndex Backend');
 });

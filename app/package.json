@@ -42,10 +42,14 @@
   "license": "MIT",
   "description": "Backend for VisionIndex – a post-event facial recognition system that analyzes CCTV recordings to track and log individual presence across institutional zones for attendance and security auditing.",
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
-    "mongoose": "^8.17.0"
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.17.0",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
