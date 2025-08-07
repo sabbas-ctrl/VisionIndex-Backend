@@ -29,4 +29,6 @@ jobs:
       - name: Run Secret Scan (Gitleaks)
         uses: zricethezav/gitleaks-action@v2.3.3
         with:
+            report-format: sarif
+            report-path: gitleaks_results_sarif.json 
             exit-code: 1
