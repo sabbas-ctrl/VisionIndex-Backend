@@ -19,6 +19,40 @@ Dr. Mehdi Hassan
 
 ---
 
+## 🚦 Project Status & Progress
+
+### Current Situation
+- **Backend API:** Core Express.js server is up and running.
+- **Database:** MongoDB integration locally, complete; models for users and video metadata implemented.
+- **Authentication:** JWT-based authentication and role-based access control are functional.
+- **Logging:** User activity and error logging implemented.
+- **Testing:** Initial unit tests for core modules in place.
+
+### Next Steps
+- Complete detection and embedding pipeline.
+- Integrate vector database for feature storage.
+- Implement advanced search and analytics endpoints.
+- Expand test coverage and error handling.
+- Finalize dashboard and reporting modules.
+
+---
+
+## ⚙️ CI/CD Setup
+
+Our CI/CD pipeline is designed for reliability and rapid iteration:
+
+1. **GitHub Actions**  
+   - **Linting:** Runs ESLint and Prettier on every push and pull request.
+   - **Testing:** Executes all unit and integration tests.
+   - **Build:** Builds the backend and checks for dependency issues.
+   - **Docker:** Builds and pushes Docker images to GitHub Container Registry.
+   - **Deployment:** (Planned) Auto-deploy to staging/production on successful main branch merges.
+
+2. **Environment Variables**  
+   - All secrets and environment-specific configs are managed via `.env` files (excluded from git).
+
+---
+
 ## 🚀 VisionIndex Modules (Planned & In Development)
 
 ### 1. 🔐 User Authentication & Access Control
@@ -83,8 +117,7 @@ Dr. Mehdi Hassan
 - **Async Tasks:** Celery + Redis
 - **Video Processing:** OpenCV
 - **Authentication:** JWT
-- **Containerization:** Docker + Docker Compose
-- **CI/CD:** GitHub Actions (planned)
+- **CI/CD:** GitHub Actions
 
 ---
 
@@ -101,9 +134,6 @@ visionindex-backend/
 │
 ├── worker/                # Celery workers for async jobs
 ├── tests/                 # Unit & integration tests
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
 ├── LICENSE
 └── README.md
 ```
