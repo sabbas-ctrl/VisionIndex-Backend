@@ -48,7 +48,7 @@ export const register = async (req, res) => {
     }
 
     const validPermissions = permissions?.filter(p => PERMISSIONS.includes(p)) || [];
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const newUser = new User({
       fullName,
@@ -113,3 +113,60 @@ export const logout = async (req, res) => {
     res.status(500).json({ message: 'Server error during logout.' });
   }
 };
+
+
+// 🔁 Issue a new access token using refresh token
+export const refreshToken = async (req, res) => {
+  const token = req.body.token;
+  if (!token) return res.status(401).json({ message: 'Refresh token required' });
+
+  try {
+    const user = await User.findOne({ refreshToken: token });
+    if (!user) return res.status(403).json({ message: 'Invalid refresh token' });
+
+    jwt.verify(token, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
+      if (err || decoded.id !== user._id.toString()) {
+        return res.status(403).json({ message: 'Invalid or expired refresh token' });
+      }
+
+      const accessToken = generateTokens(user);
+      res.json({ accessToken });
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error'});
+    console.error('Refresh token error:', err);
+  }
+};
+
+
+
+
+
+//temporary dev registration endpoint
+// 🚨 Only for initial setup — REMOVE after first use
+export const devRegister = async (req, res) => {
+  try {
+    const existingAdmin = await User.findOne({ email: 'admin@vision.pk' });
+    if (existingAdmin) {
+      return res.status(400).json({ message: 'Admin already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash('Admin123!', 12); // choose your own secure default
+
+    const admin = new User({
+      fullName: 'Sabbas Ahmad',
+      email: 'sabbbas.a30@gmail.com',
+      password: hashedPassword,
+      role: 'admin',
+      permissions: PERMISSIONS, // give all possible permissions initially
+      addedBy: null,
+    });
+
+    await admin.save();
+
+    res.status(201).json({ message: 'Initial admin created', email: admin.email });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to create admin', error: err.message });
+  }
+};
+// 🚨 Only for initial setup — REMOVE after first use

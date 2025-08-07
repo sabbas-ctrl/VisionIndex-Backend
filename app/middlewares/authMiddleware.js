@@ -17,6 +17,7 @@ export const verifyToken = (req, res, next) => {
     req.user = decoded; // Attach user payload to request
     next();
   } catch (err) {
+    console.error('Token verification error:', err);
     return res.status(403).json({ message: 'Invalid or expired token' });
   }
 };
@@ -31,6 +32,7 @@ export const verifyRole = (requiredRole) => {
       }
       next();
     } catch (err) {
+      console.error('Role verification error:', err);
       return res.status(500).json({ message: 'Server error during role check' });
     }
   };
