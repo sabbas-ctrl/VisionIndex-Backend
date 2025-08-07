@@ -27,8 +27,6 @@ jobs:
         working-directory: ./app
 
       - name: Run Secret Scan (Gitleaks)
-        uses: zricethezav/gitleaks-action@v2.3.3
-        with:
-            report-format: sarif
-            report-path: gitleaks_results_sarif.json 
-            exit-code: 1
+        run: |
+          curl -sL https://github.com/zricethezav/gitleaks/releases/download/v8.16.1/gitleaks_8.16.1_linux_x64.tar.gz | tar xz
+          ./gitleaks detect --redact --exit-code=1
