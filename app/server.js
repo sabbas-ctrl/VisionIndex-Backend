@@ -16,6 +16,10 @@ mongoose.connect(process.env.MONGO_URI, {
   console.error('MongoDB connection error:', err);
 });
 
+const unused = 123;
+  const unused2 = 123;
+
+
 app.get('/', (req, res) => {
   res.send('Welcome to the Vision Index Backend');
 });
