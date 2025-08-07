@@ -12,13 +12,13 @@ mongoose.connect(process.env.MONGO_URI, {
   useUnifiedTopology: true,
 }).then(() => {
   console.log('Connected to MongoDB');
-}).catch(err => {
+}).catch((err) => {
   console.error('MongoDB connection error:', err);
 });
 
 app.get('/', (req, res) => {
   res.send('Welcome to the Vision Index Backend');
-})
+});
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' });
@@ -27,4 +27,4 @@ app.get('/health', (req, res) => {
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
-})
+});
