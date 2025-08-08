@@ -50,9 +50,9 @@ jobs:
         run: npm test
         working-directory: ./app
 
-      - name: Force terminate leftover processes
-        if: always()
-        run: |
-          # Use pkill with SIGKILL to forcefully terminate any Node.js processes
-          # The -9 flag corresponds to the SIGKILL signal
-          pkill -9 -f node || true
+      # - name: Force terminate leftover processes
+      #   if: always()
+      #   run: |
+      #     # Use pkill with SIGKILL to forcefully terminate any Node.js processes
+      #     # The -9 flag corresponds to the SIGKILL signal
+      #     pkill -9 -f node || true
