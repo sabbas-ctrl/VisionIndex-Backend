@@ -2,19 +2,24 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User, { ROLES, PERMISSIONS } from '../models/User.js';
 import winston from 'winston';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 // === Logger Setup ===
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.json(),
-  transports: [
-    new winston.transports.File({ filename: 'logs/auth.log' }),
-  ],
+  transports: [new winston.transports.File({ filename: 'logs/auth.log' })],
 });
 
 // === Secrets from Environment ===
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+
+if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
+  console.error("❌ JWT secrets are missing from .env");
+}
 
 // === Generate Access + Refresh Tokens ===
 const generateTokens = (user) => {
@@ -60,12 +65,13 @@ export const register = async (req, res) => {
     });
 
     await newUser.save();
-    logger.info(`User registered: ${email} by ${addedBy}`);
+    logger.info(`✅ User registered: ${email} by ${addedBy}`);
 
     res.status(201).json({ message: 'User registered successfully.' });
 
   } catch (err) {
-    logger.error('Registration failed', err);
+    logger.error('❌ Registration failed', err);
+    console.error("REGISTER ERROR:", err);
     res.status(500).json({ message: 'Server error during registration.' });
   }
 };
@@ -73,17 +79,27 @@ export const register = async (req, res) => {
 // === LOGIN ===
 export const login = async (req, res) => {
   try {
+    console.log("ENV JWT_SECRET:", !!JWT_SECRET);
+    console.log("ENV JWT_REFRESH_SECRET:", !!JWT_REFRESH_SECRET);
+
     const { email, password } = req.body;
+    console.log("Login attempt:", email);
 
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ message: 'Invalid credentials.' });
 
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log("Password match:", isMatch);
+
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials.' });
 
     const { accessToken, refreshToken } = generateTokens(user);
 
-    logger.info(`User login: ${email}`);
+    // Save refresh token for future verification
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    logger.info(`✅ User login: ${email}`);
 
     res.status(200).json({
       accessToken,
@@ -98,7 +114,8 @@ export const login = async (req, res) => {
     });
 
   } catch (err) {
-    logger.error('Login failed', err);
+    logger.error('❌ Login failed', err);
+    console.error("LOGIN ERROR:", err);
     res.status(500).json({ message: 'Server error during login.' });
   }
 };
@@ -114,8 +131,7 @@ export const logout = async (req, res) => {
   }
 };
 
-
-// 🔁 Issue a new access token using refresh token
+// === REFRESH TOKEN ===
 export const refreshToken = async (req, res) => {
   const token = req.body.token;
   if (!token) return res.status(401).json({ message: 'Refresh token required' });
@@ -124,49 +140,46 @@ export const refreshToken = async (req, res) => {
     const user = await User.findOne({ refreshToken: token });
     if (!user) return res.status(403).json({ message: 'Invalid refresh token' });
 
-    jwt.verify(token, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
+    jwt.verify(token, JWT_REFRESH_SECRET, (err, decoded) => {
       if (err || decoded.id !== user._id.toString()) {
         return res.status(403).json({ message: 'Invalid or expired refresh token' });
       }
 
-      const accessToken = generateTokens(user);
-      res.json({ accessToken });
+      const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
+      user.refreshToken = newRefreshToken;
+      user.save();
+
+      res.json({ accessToken, refreshToken: newRefreshToken });
     });
   } catch (err) {
-    res.status(500).json({ message: 'Server error'});
-    console.error('Refresh token error:', err);
+    console.error('REFRESH ERROR:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
-
-
-
-
-//temporary dev registration endpoint
-// 🚨 Only for initial setup — REMOVE after first use
+// === DEV REGISTER ===
 export const devRegister = async (req, res) => {
   try {
-    const existingAdmin = await User.findOne({ email: 'admin@vision.pk' });
+    const existingAdmin = await User.findOne({ email: 'sabbbas.a30@gmail.com' });
     if (existingAdmin) {
       return res.status(400).json({ message: 'Admin already exists' });
     }
 
-    const hashedPassword = await bcrypt.hash('Admin123!', 12); // choose your own secure default
+    const hashedPassword = await bcrypt.hash('Admin123!', 12);
 
     const admin = new User({
       fullName: 'Sabbas Ahmad',
       email: 'sabbbas.a30@gmail.com',
       password: hashedPassword,
       role: 'admin',
-      permissions: PERMISSIONS, // give all possible permissions initially
+      permissions: PERMISSIONS,
       addedBy: null,
     });
 
     await admin.save();
-
     res.status(201).json({ message: 'Initial admin created', email: admin.email });
   } catch (err) {
+    console.error("DEV REGISTER ERROR:", err);
     res.status(500).json({ message: 'Failed to create admin', error: err.message });
   }
 };
-// 🚨 Only for initial setup — REMOVE after first use

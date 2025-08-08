@@ -1,0 +1,22 @@
+{"level":"error","message":"Login failed secretOrPrivateKey must have a value","stack":"Error: secretOrPrivateKey must have a value\n    at module.exports [as sign] (C:\\Users\\DELL\\Desktop\\VisualIndex Backend\\app\\node_modules\\jsonwebtoken\\sign.js:111:20)\n    at generateTokens (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:27:27)\n    at login (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:84:43)"}
+{"level":"info","message":"User logout attempt"}
+{"level":"error","message":"Login failed secretOrPrivateKey must have a value","stack":"Error: secretOrPrivateKey must have a value\n    at module.exports [as sign] (C:\\Users\\DELL\\Desktop\\VisualIndex Backend\\app\\node_modules\\jsonwebtoken\\sign.js:111:20)\n    at generateTokens (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:27:27)\n    at login (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:84:43)"}
+{"level":"error","message":"Login failed secretOrPrivateKey must have a value","stack":"Error: secretOrPrivateKey must have a value\n    at module.exports [as sign] (C:\\Users\\DELL\\Desktop\\VisualIndex Backend\\app\\node_modules\\jsonwebtoken\\sign.js:111:20)\n    at generateTokens (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:27:27)\n    at login (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:84:43)"}
+{"level":"error","message":"Login failed secretOrPrivateKey must have a value","stack":"Error: secretOrPrivateKey must have a value\n    at module.exports [as sign] (C:\\Users\\DELL\\Desktop\\VisualIndex Backend\\app\\node_modules\\jsonwebtoken\\sign.js:111:20)\n    at generateTokens (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:27:27)\n    at login (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:84:43)"}
+{"level":"error","message":"Login failed secretOrPrivateKey must have a value","stack":"Error: secretOrPrivateKey must have a value\n    at module.exports [as sign] (C:\\Users\\DELL\\Desktop\\VisualIndex Backend\\app\\node_modules\\jsonwebtoken\\sign.js:111:20)\n    at generateTokens (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:27:27)\n    at login (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:84:43)"}
+{"level":"error","message":"Login failed accessToken is not defined","stack":"ReferenceError: accessToken is not defined\n    at generateTokens (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:29:12)\n    at login (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:86:43)"}
+{"level":"error","message":"Login failed accessToken is not defined","stack":"ReferenceError: accessToken is not defined\n    at generateTokens (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:32:12)\n    at login (file:///C:/Users/DELL/Desktop/VisualIndex%20Backend/app/controllers/authController.js:89:43)"}
+{"level":"info","message":"User registered: viewer@test.com by 689530bbc1d8d5095e3b47f5"}
+{"level":"info","message":"User logout attempt"}
+{"level":"info","message":"✅ User login: sabbbas.a30@gmail.com"}
+{"level":"info","message":"✅ User login: viewer@test.com"}
+{"level":"info","message":"User logout attempt"}
+{"level":"info","message":"✅ User login: sabbbas.a30@gmail.com"}
+{"level":"info","message":"✅ User registered: viewer@test.com by 68954bf93b3dcab949394620"}
+{"level":"info","message":"✅ User login: viewer@test.com"}
+{"level":"info","message":"User logout attempt"}
+{"level":"info","message":"✅ User login: sabbbas.a30@gmail.com"}
+{"level":"info","message":"✅ User login: sabbbas.a30@gmail.com"}
+{"level":"info","message":"✅ User registered: viewer_1754615267686@test.com by 68954de468228c1b5a79ecaa"}
+{"level":"info","message":"✅ User login: viewer_1754615267686@test.com"}
+{"level":"info","message":"User logout attempt"}

@@ -2,13 +2,13 @@
   "name": "vision-index",
   "version": "1.0.0",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
     "lint": "eslint . --ext .js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha \"tests/**/*.js\" --timeout 10000"
   },
-  "type": "module",
   "keywords": [
     "visionindex",
     "facial recognition",
@@ -43,6 +43,7 @@
   "description": "Backend for VisionIndex – a post-event facial recognition system that analyzes CCTV recordings to track and log individual presence across institutional zones for attendance and security auditing.",
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "chai-http": "^5.1.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
@@ -53,9 +54,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "chai": "^5.2.1",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^16.3.0",
-    "prettier": "^3.6.2"
+    "mocha": "^11.7.1",
+    "prettier": "^3.6.2",
+    "supertest": "^7.1.4"
   }
 }
