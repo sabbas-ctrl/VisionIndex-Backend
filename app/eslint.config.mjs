@@ -11,6 +11,14 @@ export default defineConfig([
     ],
   },
   {
+  "globals": {
+    "describe": "readonly",
+    "it": "readonly",
+    "before": "readonly",
+    "after": "readonly"
+  }
+},
+  {
   "overrides": [
     {
       "files": ["tests/**/*.js"],
