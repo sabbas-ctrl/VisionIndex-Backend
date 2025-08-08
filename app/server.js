@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
 import authRoutes from './routes/authRoutes.js';
+import './jobs/tokenCleanupJob.js';
 
 dotenv.config();
 

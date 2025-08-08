@@ -123,8 +123,12 @@ export const login = async (req, res) => {
 // === LOGOUT ===
 export const logout = async (req, res) => {
   try {
-    logger.info(`User logout attempt`);
-    res.status(200).json({ message: 'Logout handled on client side. Token deleted.' });
+    const userId = req.user?.id; // if you have verifyToken middleware
+    if (userId) {
+      await User.findByIdAndUpdate(userId, { $unset: { refreshToken: 1 } });
+      logger.info(`User ${userId} logged out — refresh token removed from DB`);
+    }
+    res.status(200).json({ message: 'Logout successful. Refresh token removed.' });
   } catch (err) {
     logger.error('Logout error', err);
     res.status(500).json({ message: 'Server error during logout.' });
@@ -137,17 +141,20 @@ export const refreshToken = async (req, res) => {
   if (!token) return res.status(401).json({ message: 'Refresh token required' });
 
   try {
+    console.log("Incoming refresh token:", token);
     const user = await User.findOne({ refreshToken: token });
+    console.log("User found:", !!user);
+
     if (!user) return res.status(403).json({ message: 'Invalid refresh token' });
 
-    jwt.verify(token, JWT_REFRESH_SECRET, (err, decoded) => {
+    jwt.verify(token, JWT_REFRESH_SECRET, async (err, decoded) => {
       if (err || decoded.id !== user._id.toString()) {
         return res.status(403).json({ message: 'Invalid or expired refresh token' });
       }
 
       const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
       user.refreshToken = newRefreshToken;
-      user.save();
+      await user.save(); // ✅ Ensure DB is updated before returning
 
       res.json({ accessToken, refreshToken: newRefreshToken });
     });
@@ -156,6 +163,7 @@ export const refreshToken = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // === DEV REGISTER ===
 export const devRegister = async (req, res) => {

@@ -1,4 +1,4 @@
-// app/tests/auth.full.test.js
+/* eslint-env mocha */
 import request from 'supertest';
 import { expect } from 'chai';
 import mongoose from 'mongoose';
@@ -74,7 +74,7 @@ describe('Auth API - Full Supertest Suite', function () {
         if (r.note) console.log(`   note: ${r.note}`);
       });
     } finally {
-      // leave DB intact by request (you said you want to inspect data)
+      // leave DB intact by request
       await mongoose.disconnect();
       console.log('Disconnected from MongoDB');
     }
@@ -86,7 +86,6 @@ describe('Auth API - Full Supertest Suite', function () {
       const res = await request(app).get('/health');
       expect(res.status).to.equal(200);
       expect(res.body).to.have.property('status');
-      // Accept both 'OK' and 'Ok' or 'ok' depending on your implementation
       results.push({ name: testName, status: 'passed', note: `status=${res.body.status}` });
     } catch (err) {
       console.error('TEST ERROR - Health check:', err);
@@ -106,6 +105,10 @@ describe('Auth API - Full Supertest Suite', function () {
       expect(res.body).to.have.property('accessToken');
       expect(res.body).to.have.property('refreshToken');
 
+      // 🔹 Update latest tokens so refresh test always uses the fresh DB one
+      adminToken = res.body.accessToken;
+      adminRefreshToken = res.body.refreshToken;
+
       results.push({ name: testName, status: 'passed' });
     } catch (err) {
       console.error('TEST ERROR - Admin login:', err);
@@ -117,7 +120,6 @@ describe('Auth API - Full Supertest Suite', function () {
   it('Register viewer (admin) — POST /auth/register with admin token', async () => {
     const testName = 'Register viewer (admin)';
     try {
-      // ensure uniqueness (we already set viewerEmail unique)
       const res = await request(app)
         .post('/auth/register')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -130,13 +132,10 @@ describe('Auth API - Full Supertest Suite', function () {
           addedBy: adminId
         });
 
-      // 201 expected on create; backend returns 400 if user exists
       expect(res.status).to.equal(201);
       results.push({ name: testName, status: 'passed', note: `created ${viewerEmail}` });
     } catch (err) {
-      // If backend replies with 400 user already exists (shouldn't happen because unique email)
       console.error('TEST ERROR - Register viewer:', err);
-      // capture response body if available (supertest supplies err.response)
       const body = err.response ? err.response.body : undefined;
       results.push({ name: testName, status: 'failed', error: err.message, body });
       expect.fail(err.message);
@@ -157,7 +156,6 @@ describe('Auth API - Full Supertest Suite', function () {
           addedBy: adminId
         });
 
-      // Expect 401 (missing token) or 403 depending on your verifyToken implementation.
       expect([401, 403]).to.include(res.status);
       results.push({ name: testName, status: 'passed', note: `status=${res.status}` });
     } catch (err) {
@@ -173,7 +171,6 @@ describe('Auth API - Full Supertest Suite', function () {
       const res = await request(app).post('/auth/refresh').send({ token: adminRefreshToken });
       expect(res.status).to.equal(200);
       expect(res.body).to.have.property('accessToken');
-      // optionally capture the new refresh token if backend returns it
       results.push({ name: testName, status: 'passed' });
     } catch (err) {
       console.error('TEST ERROR - Refresh token:', err);
@@ -186,7 +183,6 @@ describe('Auth API - Full Supertest Suite', function () {
   it('Viewer cannot call admin-only register — POST /auth/register (viewer token)', async () => {
     const testName = 'Viewer blocked from admin route';
     try {
-      // login viewer first (we created viewer earlier with unique email)
       const logRes = await request(app).post('/auth/login').send({ email: viewerEmail, password: viewerPassword });
       expect(logRes.status).to.equal(200);
       const viewerToken = logRes.body.accessToken;
@@ -202,7 +198,6 @@ describe('Auth API - Full Supertest Suite', function () {
           permissions: []
         });
 
-      // Expect forbidden: 403 (if your role middleware uses 403), or other non-200
       expect(res.status).to.equal(403);
       results.push({ name: testName, status: 'passed' });
     } catch (err) {
