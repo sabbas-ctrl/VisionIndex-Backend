@@ -1,13 +1,13 @@
 name: VisionIndex CI
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
 jobs:
   lint-secrets-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-l
     services:
       mongo:
         image: mongo:6
