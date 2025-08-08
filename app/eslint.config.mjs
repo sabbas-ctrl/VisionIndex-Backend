@@ -10,6 +10,16 @@ export default defineConfig([
       ".env",
     ],
   },
+  {
+  "overrides": [
+    {
+      "files": ["tests/**/*.js"],
+      "env": {
+        "mocha": true
+      }
+    }
+  ]
+},
   { files: ["**/*.{js,mjs,cjs}"], plugins: { js }, extends: ["js/recommended"], languageOptions: { globals: globals.node } },
   { files: ["**/*.js"], languageOptions: { sourceType: "module" } },
 ]);
