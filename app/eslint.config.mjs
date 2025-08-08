@@ -11,23 +11,22 @@ export default defineConfig([
     ],
   },
   {
-  "globals": {
-    "describe": "readonly",
-    "it": "readonly",
-    "before": "readonly",
-    "after": "readonly"
-  }
-},
+    // Default rules for normal JS files
+    files: ["**/*.{js,mjs,cjs}"],
+    plugins: { js },
+    extends: ["js/recommended"],
+    languageOptions: {
+      globals: globals.node,
+      sourceType: "module"
+    }
+  },
   {
-  "overrides": [
-    {
-      "files": ["tests/**/*.js"],
-      "env": {
-        "mocha": true
+    // Test files override (Mocha)
+    files: ["tests/**/*.js"],
+    languageOptions: {
+      globals: {
+        ...globals.mocha, // adds describe, it, before, after
       }
     }
-  ]
-},
-  { files: ["**/*.{js,mjs,cjs}"], plugins: { js }, extends: ["js/recommended"], languageOptions: { globals: globals.node } },
-  { files: ["**/*.js"], languageOptions: { sourceType: "module" } },
+  }
 ]);
