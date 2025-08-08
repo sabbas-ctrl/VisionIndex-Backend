@@ -5,42 +5,45 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-
 jobs:
   lint-secrets-tests:
     runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:6
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
-      # 1. Checkout the repository
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2. Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
 
-      # 3. Install dependencies
       - name: Install Dependencies
         run: npm install
         working-directory: ./app
 
-      # 4. Run ESLint
       - name: Run Linter
         run: npm run lint
         working-directory: ./app
 
-      # 5. Secret scan (Gitleaks)
       - name: Run Secret Scan (Gitleaks)
         run: |
           curl -sL https://github.com/zricethezav/gitleaks/releases/download/v8.16.1/gitleaks_8.16.1_linux_x64.tar.gz | tar xz
           ./gitleaks detect --redact --exit-code=1
 
-      # 6. Run tests (with env vars from GitHub secrets)
-      - name: Run Tests
+      - name: Run Tests (Local Mongo)
         env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
+          MONGO_URI: mongodb://localhost:27017/ci_testdb
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
           NODE_ENV: test
