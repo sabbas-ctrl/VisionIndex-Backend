@@ -13,7 +13,7 @@ const results = [];
 let adminToken = null;
 let adminRefreshToken = null;
 let adminId = null;
-let viewerEmail = `viewer_${Date.now()}@test.com`; // unique per run
+let viewerEmail = `viewer_${Date.now()}@test.com`;
 let viewerPassword = 'Viewer123!';
 
 describe('Auth API - Full Supertest Suite', function () {
