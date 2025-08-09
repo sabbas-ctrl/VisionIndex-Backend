@@ -36,26 +36,6 @@ Dr. Mehdi Hassan
 - Finalize dashboard and reporting modules.
 
 ---
-
-## 🛠 Developer Commands
-
-| Command                | Description                                         |
-|------------------------|-----------------------------------------------------|
-| `npm run dev`          | Start development server with hot reload             |
-| `npm run linter`       | Run ESLint using `eslint.mjs` config in `app` folder |
-| `npm test`             | Run all unit & integration tests in `app/tests`      |
-| `npm install`          | Install project dependencies                        |
-
----
-
-🌐 Live Deployment
-
-The backend is live and can be accessed at:
-🔗 https://visionindex-backend-production.up.railway.app/
-
-This deployment is fully CI/CD-driven — any successful merge to the main branch automatically triggers build and deployment.
-
----
 ## ⚙️ CI/CD Setup
 
 Our CI/CD pipeline is designed for reliability and rapid iteration:
@@ -68,6 +48,31 @@ Our CI/CD pipeline is designed for reliability and rapid iteration:
 
 2. **Environment Variables**  
    - All secrets and environment-specific configs are managed via `.env` files (excluded from git).
+
+---
+
+## 🛠 Developer Commands
+
+| Command                | Description                                         |
+|------------------------|-----------------------------------------------------|
+| `npm run dev`          | Start development server with hot reload             |
+| `npm run linter`       | Run ESLint using `eslint.mjs` config in `app` folder |
+| `npm test`             | Run all unit & integration tests in `app/tests`      |
+| `npm install`          | Install project dependencies                        |
+
+> **Note:** Run the following command **before** executing any of the commands in the table above:  
+> ```bash
+> cd VisionIndex-Backend/app
+> ```
+
+---
+
+🌐 Live Deployment
+
+The backend is live and can be accessed at:
+🔗 https://visionindex-backend-production.up.railway.app/
+
+This deployment is fully CI/CD-driven — any successful merge to the main branch automatically triggers build and deployment.
 
 ---
 
