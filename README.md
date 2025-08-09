@@ -37,6 +37,25 @@ Dr. Mehdi Hassan
 
 ---
 
+## 🛠 Developer Commands
+
+| Command                | Description                                         |
+|------------------------|-----------------------------------------------------|
+| `npm run dev`          | Start development server with hot reload             |
+| `npm run linter`       | Run ESLint using `eslint.mjs` config in `app` folder |
+| `npm test`             | Run all unit & integration tests in `app/tests`      |
+| `npm install`          | Install project dependencies                        |
+
+---
+
+🌐 Live Deployment
+
+The backend is live and can be accessed at:
+🔗 https://visionindex-backend-production.up.railway.app/
+
+This deployment is fully CI/CD-driven — any successful merge to the main branch automatically triggers build and deployment.
+
+---
 ## ⚙️ CI/CD Setup
 
 Our CI/CD pipeline is designed for reliability and rapid iteration:
@@ -45,7 +64,6 @@ Our CI/CD pipeline is designed for reliability and rapid iteration:
    - **Linting:** Runs ESLint and Prettier on every push and pull request.
    - **Testing:** Executes all unit and integration tests.
    - **Build:** Builds the backend and checks for dependency issues.
-   - **Docker:** Builds and pushes Docker images to GitHub Container Registry.
    - **Deployment:** (Planned) Auto-deploy to staging/production on successful main branch merges.
 
 2. **Environment Variables**  
