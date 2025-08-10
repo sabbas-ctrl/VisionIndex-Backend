@@ -148,15 +148,21 @@ This deployment is fully CI/CD-driven — any successful merge to the main branc
 
 ```bash
 visionindex-backend/
+├── .github/
+│   └── workflows/
 ├── app/
-│   ├── api/               # Express routes
-│   ├── core/              # Configs, constants
-│   ├── models/            # DB models
-│   ├── services/          # Logic for detection, search, etc.
-│   └── utils/             # Helper functions
-│
-├── worker/                # Celery workers for async jobs
-├── tests/                 # Unit & integration tests
+│   ├── controllers/
+│   ├── jobs/
+│   ├── logs/
+│   ├── middlewares/
+│   ├── models/
+│   ├── routes/
+│   ├── tests/
+│   ├── .env
+│   ├── eslint.config.mjs
+│   ├── packages.json
+│   └── server.js
+├── .gitignore
 ├── LICENSE
 └── README.md
 ```
