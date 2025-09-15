@@ -24,7 +24,35 @@ export class Permission {
   }
 
   static async delete(permissionId) {
-    await pool.query('DELETE FROM permissions WHERE permission_id = $1, [permissionId]');
+    await pool.query('DELETE FROM permissions WHERE permission_id = $1', [permissionId]);
     return { message: 'Permission deleted' };
+  }
+
+  static async update(permissionId, { permissionName, description }) {
+    const fields = [];
+    const values = [];
+    let idx = 1;
+
+    if (permissionName !== undefined) {
+      fields.push(`permission_name = $${idx++}`);
+      values.push(permissionName);
+    }
+
+    if (description !== undefined) {
+      fields.push(`description = $${idx++}`);
+      values.push(description);
+    }
+
+    if (fields.length === 0) {
+      return null;
+    }
+
+    values.push(permissionId);
+
+    const result = await pool.query(
+      `UPDATE permissions SET ${fields.join(', ')} WHERE permission_id = $${idx} RETURNING *`,
+      values
+    );
+    return result.rows[0] || null;
   }
 }

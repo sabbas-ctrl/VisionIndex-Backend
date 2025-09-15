@@ -11,7 +11,14 @@ export class Role {
   }
 
   static async findAll() {
-    const result = await pool.query('SELECT * FROM roles ORDER BY role_id');
+    const result = await pool.query(`
+      SELECT r.role_id, r.role_name, r.description,
+             COUNT(u.user_id) AS role_users
+      FROM roles r
+      LEFT JOIN users u ON r.role_id = u.role_id
+      GROUP BY r.role_id, r.role_name, r.description
+      ORDER BY r.role_id
+    `);
     return result.rows;
   }
 
@@ -23,8 +30,27 @@ export class Role {
     return result.rows[0];
   }
 
+  static async update(roleId, { roleName, description }) {
+    const result = await pool.query(
+      `UPDATE roles
+       SET role_name = $1, description = $2
+       WHERE role_id = $3
+       RETURNING *`,
+      [roleName, description, roleId]
+    );
+    return result.rows[0];
+  }
+
   static async delete(roleId) {
     await pool.query('DELETE FROM roles WHERE role_id = $1', [roleId]);
     return { message: 'Role deleted' };
   }
+
+  // static async update(roleId, { roleName, description }) {
+  //   const result = await pool.query(
+  //     `UPDATE roles SET role_name = $1, description = $2 WHERE role_id = $3 RETURNING *`,
+  //     [roleName, description, roleId]
+  //   );
+  //   return result.rows[0];
+  // }
 }
