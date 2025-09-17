@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
+import { pool } from '../config/postgresql.js';
 
 export const register = async (req, res) => {
   try {
@@ -8,7 +9,7 @@ export const register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const user = await User.create({ username, email, passwordHash, roleId });
+    const user = await User.create({ username, email, passwordhash: passwordHash, roleId });
     res.status(201).json({ message: 'User registered', user });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -33,12 +34,25 @@ export const login = async (req, res) => {
     );
 
     res.json({ message: 'Login successful', token });
+
+    await pool.query(
+      "UPDATE users SET status = 'active' WHERE user_id = $1",
+      [user.user_id]
+    );
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
 export const logout = async (req, res) => {
-  // if using stateless JWT → just clear client token
-  res.json({ message: 'Logged out (clear token on client)' });
+  try {
+    await pool.query(
+      "UPDATE users SET status = 'inactive' WHERE user_id = $1",
+      [req.user.userId]   // coming from decoded JWT in middleware
+    );
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
