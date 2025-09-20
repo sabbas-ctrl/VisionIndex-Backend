@@ -27,13 +27,23 @@ export const login = async (req, res) => {
 
     await User.updateLogin(user.user_id);
 
+    // Create token with only userId for security
     const token = jwt.sign(
-      { userId: user.user_id, roleId: user.role_id },
+      { userId: user.user_id },
       process.env.JWT_SECRET,
-      { expiresIn: '1d' }
+      { expiresIn: '15m' }
     );
 
-    res.json({ message: 'Login successful', token });
+    // Set HttpOnly cookie
+    res.cookie('accessToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+      sameSite: 'strict',
+      // maxAge: 1 * 60 * 1000, // 15 minutes in milliseconds
+      expires: '1m'
+    });
+
+    res.json({ message: 'Login successful' });
 
     await pool.query(
       "UPDATE users SET status = 'active' WHERE user_id = $1",
@@ -51,7 +61,23 @@ export const logout = async (req, res) => {
       [req.user.userId]   // coming from decoded JWT in middleware
     );
 
+    // Clear the HttpOnly cookie
+    res.clearCookie('accessToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict'
+    });
+
     res.json({ message: 'Logged out successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const verifyAuth = async (req, res) => {
+  try {
+    // If we reach here, the authMiddleware has already verified the token
+    res.json({ authenticated: true, userId: req.user.userId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

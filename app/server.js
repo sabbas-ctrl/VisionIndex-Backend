@@ -2,23 +2,24 @@ import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import authRoutes from './routes/authRoutes.js';
+import cookieParser from 'cookie-parser';
 import './jobs/tokenCleanupJob.js';
 import { connectDB } from './config/postgresql.js';
-import routes from './routes/index.js'; // Add this line
+import routes from './routes/index.js';
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true // Allow cookies to be sent
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(helmet())
-
-
+app.use(helmet());
+app.use(cookieParser());
 
 // Routes
-// app.use('/auth', authRoutes);
 app.use('/', routes); // Update this line
 
 app.get('/', (req, res) => {
@@ -34,6 +35,6 @@ app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
 
-connectDB(); // Connect to DB on server start
+connectDB();
 
-export default app; // 👈 Add this line
+export default app;
