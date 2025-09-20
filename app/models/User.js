@@ -4,7 +4,7 @@ export class User {
   static async create({ username, email, passwordhash, roleId }) {
     const result = await pool.query(
       `INSERT INTO users (username, email, password_hash, role_id, status)
-       VALUES ($1, $2, $3, $4, 'active')
+       VALUES ($1, $2, $3, $4, 'inactive')
        RETURNING user_id, username, email, role_id, status`,
       [username, email, passwordhash, roleId]
     );
