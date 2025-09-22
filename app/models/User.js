@@ -4,7 +4,7 @@ export class User {
   static async create({ username, email, passwordhash, roleId }) {
     const result = await pool.query(
       `INSERT INTO users (username, email, password_hash, role_id, status)
-       VALUES ($1, $2, $3, $4, 'active')
+       VALUES ($1, $2, $3, $4, 'inactive')
        RETURNING user_id, username, email, role_id, status`,
       [username, email, passwordhash, roleId]
     );
@@ -77,5 +77,28 @@ export class User {
     );
   
     return result.rows[0]; // will be undefined if no user found
+  }
+
+  // Refresh token methods
+  static async setRefreshToken(userId, refreshToken) {
+    await pool.query(
+      'UPDATE users SET refresh_token = $1 WHERE user_id = $2',
+      [refreshToken, userId]
+    );
+  }
+
+  static async findByRefreshToken(refreshToken) {
+    const result = await pool.query(
+      'SELECT * FROM users WHERE refresh_token = $1',
+      [refreshToken]
+    );
+    return result.rows[0];
+  }
+
+  static async clearRefreshToken(userId) {
+    await pool.query(
+      'UPDATE users SET refresh_token = NULL WHERE user_id = $1',
+      [userId]
+    );
   }
 }
