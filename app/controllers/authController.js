@@ -28,7 +28,6 @@ export const login = async (req, res) => {
 
     await User.updateLogin(user.user_id);
 
-<<<<<<< HEAD
     // Generate refresh token (random string, not JWT)
     const refreshToken = crypto.randomBytes(64).toString('hex');
     
@@ -55,22 +54,6 @@ export const login = async (req, res) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-=======
-    // Create token with only userId for security
-    const token = jwt.sign(
-      { userId: user.user_id },
-      process.env.JWT_SECRET,
-      { expiresIn: '15m' }
-    );
-
-    // Set HttpOnly cookie
-    res.cookie('accessToken', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-      sameSite: 'strict',
-      // maxAge: 1 * 60 * 1000, // 15 minutes in milliseconds
-      expires: '1m'
->>>>>>> 02b4b7394aa667efc713606e37283be7dffd5901
     });
 
     res.json({ message: 'Login successful' });
@@ -86,44 +69,33 @@ export const login = async (req, res) => {
 
 export const logout = async (req, res) => {
   try {
-<<<<<<< HEAD
     // Clear refresh token from database
     await User.clearRefreshToken(req.user.userId);
 
-=======
->>>>>>> 02b4b7394aa667efc713606e37283be7dffd5901
     await pool.query(
       "UPDATE users SET status = 'inactive' WHERE user_id = $1",
       [req.user.userId]   // coming from decoded JWT in middleware
     );
 
-<<<<<<< HEAD
     // Clear both HttpOnly cookies
-=======
-    // Clear the HttpOnly cookie
->>>>>>> 02b4b7394aa667efc713606e37283be7dffd5901
     res.clearCookie('accessToken', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict'
     });
 
-<<<<<<< HEAD
     res.clearCookie('refreshToken', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict'
     });
 
-=======
->>>>>>> 02b4b7394aa667efc713606e37283be7dffd5901
     res.json({ message: 'Logged out successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-<<<<<<< HEAD
 export const refreshToken = async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken;
@@ -163,8 +135,6 @@ export const refreshToken = async (req, res) => {
   }
 };
 
-=======
->>>>>>> 02b4b7394aa667efc713606e37283be7dffd5901
 export const verifyAuth = async (req, res) => {
   try {
     // If we reach here, the authMiddleware has already verified the token
