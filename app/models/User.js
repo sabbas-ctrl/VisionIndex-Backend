@@ -78,27 +78,4 @@ export class User {
   
     return result.rows[0]; // will be undefined if no user found
   }
-
-  // Refresh token methods
-  static async setRefreshToken(userId, refreshToken) {
-    await pool.query(
-      'UPDATE users SET refresh_token = $1 WHERE user_id = $2',
-      [refreshToken, userId]
-    );
-  }
-
-  static async findByRefreshToken(refreshToken) {
-    const result = await pool.query(
-      'SELECT * FROM users WHERE refresh_token = $1',
-      [refreshToken]
-    );
-    return result.rows[0];
-  }
-
-  static async clearRefreshToken(userId) {
-    await pool.query(
-      'UPDATE users SET refresh_token = NULL WHERE user_id = $1',
-      [userId]
-    );
-  }
 }
