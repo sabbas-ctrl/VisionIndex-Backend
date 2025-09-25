@@ -49,11 +49,17 @@ export const login = async (req, res) => {
       expiresAt: expiresAt
     });
 
-    // Create access token with only userId for security
+    // Get user permissions from role_permissions table
+    const permissions = await User.getPermissions(user.user_id);
+
+    // Create access token with userId and permissions for security
     const accessToken = jwt.sign(
-      { userId: user.user_id },
+      { 
+        userId: user.user_id,
+        permissions: permissions
+      },
       process.env.JWT_SECRET,
-      { expiresIn: '15m' } // Increased to 15 minutes
+      { expiresIn: '15m' } // 15 minutes
     );
 
     // Set HttpOnly cookies for both tokens
@@ -136,9 +142,15 @@ export const refreshToken = async (req, res) => {
       return res.status(403).json({ error: 'Invalid or expired refresh token' });
     }
 
-    // Generate new access token
+    // Get user permissions from role_permissions table
+    const permissions = await User.getPermissions(tokenRecord.user_id);
+
+    // Generate new access token with permissions
     const newAccessToken = jwt.sign(
-      { userId: tokenRecord.user_id },
+      { 
+        userId: tokenRecord.user_id,
+        permissions: permissions
+      },
       process.env.JWT_SECRET,
       { expiresIn: '15m' }
     );
@@ -164,7 +176,11 @@ export const refreshToken = async (req, res) => {
 export const verifyAuth = async (req, res) => {
   try {
     // If we reach here, the authMiddleware has already verified the token
-    res.json({ authenticated: true, userId: req.user.userId });
+    res.json({ 
+      authenticated: true, 
+      userId: req.user.userId,
+      permissions: req.user.permissions || []
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

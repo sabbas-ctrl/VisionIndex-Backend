@@ -78,4 +78,17 @@ export class User {
   
     return result.rows[0]; // will be undefined if no user found
   }
+
+  // Get user permissions from role_permissions table only
+  static async getPermissions(userId) {
+    const result = await pool.query(
+      `SELECT p.permission_name
+       FROM users u
+       JOIN role_permissions rp ON u.role_id = rp.role_id
+       JOIN permissions p ON rp.permission_id = p.permission_id
+       WHERE u.user_id = $1`,
+      [userId]
+    );
+    return result.rows.map(row => row.permission_name);
+  }
 }
