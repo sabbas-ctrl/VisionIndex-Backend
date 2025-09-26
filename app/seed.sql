@@ -201,3 +201,4 @@ FROM roles r
 LEFT JOIN role_permissions rp ON r.role_id = rp.role_id
 GROUP BY r.role_id, r.role_name, r.description
 ORDER BY r.role_id;
+
