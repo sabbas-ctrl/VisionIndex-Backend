@@ -87,3 +87,14 @@ export const getRolePermissions = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+// Remove a specific permission from a role (does not delete the permission itself)
+export const removePermissionFromRole = async (req, res) => {
+  try {
+    const { roleId, permissionId } = req.params;
+    await RolePermission.remove(roleId, permissionId);
+    res.json({ message: 'Permission removed from role' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import './jobs/tokenCleanupJob.js';
 import { connectDB } from './config/postgresql.js';
+import { connectMongoDB } from './config/mongodb.js'; 
 import routes from './routes/index.js';
 
 dotenv.config();
@@ -36,5 +37,6 @@ app.listen(port, () => {
 });
 
 connectDB();
+connectMongoDB();  // MongoDB ✅
 
 export default app;

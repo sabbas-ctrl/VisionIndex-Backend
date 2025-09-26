@@ -55,4 +55,12 @@ export class Permission {
     );
     return result.rows[0] || null;
   }
+
+  static async isAssignedToAnyRole(permissionId) {
+    const result = await pool.query(
+      'SELECT 1 FROM role_permissions WHERE permission_id = $1 LIMIT 1',
+      [permissionId]
+    );
+    return result.rowCount > 0;
+  }
 }

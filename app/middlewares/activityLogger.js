@@ -10,7 +10,10 @@ export const activityLogger = (actionType, options = {}) => {
 
     // Extract user and session information
     const userId = req.user?.userId;
-    const sessionId = req.cookies?.refreshToken; // Using refresh token as session identifier
+    // Use refresh token as session identifier only if it's a valid UUID; otherwise set null
+    const refreshTokenCookie = req.cookies?.refreshToken;
+    const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+    const sessionId = isUuid(refreshTokenCookie) ? refreshTokenCookie : null;
     const ipAddress = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
 

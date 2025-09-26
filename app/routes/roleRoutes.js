@@ -6,7 +6,8 @@ import {
   updateRole, 
   deleteRole,
   assignPermissionToRole, 
-  getRolePermissions 
+  getRolePermissions,
+  removePermissionFromRole 
 } from '../controllers/roleController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 
@@ -22,5 +23,6 @@ router.delete('/:id', authMiddleware, deleteRole);
 // Role permission operations
 router.post('/assign-permission', authMiddleware, assignPermissionToRole);
 router.get('/:id/permissions', authMiddleware, getRolePermissions);
+router.delete('/:roleId/permissions/:permissionId', authMiddleware, removePermissionFromRole);
 
 export default router;
