@@ -21,9 +21,10 @@ router.post('/logout', authMiddleware, logout);
 router.get('/verify', authMiddleware, verifyAuth);
 
 // Password reset routes
-import { forgotPassword, resetPassword } from '../controllers/authController.js';
+import { forgotPassword, resetPassword, verifyEmail } from '../controllers/authController.js';
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
+router.post('/verify-email', verifyEmail);
 
 // Session management routes
 router.get('/sessions', authMiddleware, getUserSessions);

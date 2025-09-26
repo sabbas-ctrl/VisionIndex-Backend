@@ -6,6 +6,32 @@ import { RefreshToken } from '../models/RefreshToken.js';
 import { pool } from '../config/postgresql.js';
 import PasswordResetToken from '../models/PasswordResetToken.js';
 import { sendMail } from '../config/mailer.js';
+import EmailVerificationToken from '../models/EmailVerificationToken.js';
+import fs from 'fs';
+import path from 'path';
+
+// Point to the FRONTEND public folder
+const logoPath = path.resolve(
+  process.cwd(),
+  '..',       
+  '..',                // go up from VisionIndex-Backend
+  'VisionIndex-Frontend',
+  'public',
+  'logo.png'
+);
+console.log("here it is:")
+console.log(logoPath);
+
+// Convert to base64 once
+let logoBase64 = '';
+if (fs.existsSync(logoPath)) {
+  const image = fs.readFileSync(logoPath);
+  logoBase64 = `data:image/png;base64,${image.toString('base64')}`;
+} else {
+  console.warn('⚠️ Logo not found at', logoPath);
+}
+
+console.log(logoBase64.slice(0, 100));
 
 
 export const register = async (req, res) => {
@@ -15,7 +41,34 @@ export const register = async (req, res) => {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const user = await User.create({ username, email, passwordhash: passwordHash, roleId });
-    res.status(201).json({ message: 'User registered', user });
+    // Create email verification token and send verification email
+    try {
+      const rawToken = EmailVerificationToken.generateToken();
+      await EmailVerificationToken.createForUser(user.user_id, rawToken, 24);
+
+      const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const verifyUrl = `${frontendBase}/verify-email?email=${encodeURIComponent(email)}&token=${encodeURIComponent(rawToken)}`;
+      const subject = 'Verify your VisionIndex account';
+      const html = `
+        <p>Hello ${username || ''},</p>
+        <p>Welcome to VisionIndex! Please verify your email to activate your account.</p>
+        <p><a href="${verifyUrl}">Verify Email</a></p>
+        <p>This link expires in 24 hours.</p>
+      `;
+      const text = `Verify your email: ${verifyUrl}`;
+
+      const smtpConfigured = !!(process.env.SMTP_HOST);
+      if (smtpConfigured) {
+        await sendMail({ to: email, subject, html, text });
+      } else {
+        console.warn('SMTP not configured. Skipping verification email.');
+        console.info('DEV VERIFY LINK:', verifyUrl);
+      }
+    } catch (mailErr) {
+      console.warn('Email verification send failed:', mailErr?.message || mailErr);
+    }
+
+    res.status(201).json({ message: 'User registered. Please verify your email.', user });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -26,6 +79,15 @@ export const login = async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findByEmail(email);
     if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Ensure is_verified column exists and enforce verification
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE`);
+    } catch (_) {}
+
+    if (user.is_verified === false || user.is_verified === 0) {
+      return res.status(403).json({ error: 'Please verify your email before logging in' });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
@@ -252,6 +314,26 @@ export const revokeAllSessions = async (req, res) => {
   }
 };
 
+// Verify email: mark user active after valid token
+export const verifyEmail = async (req, res) => {
+  try {
+    const { email, token } = req.body;
+    if (!email || !token) return res.status(400).json({ error: 'Email and token are required' });
+
+    const record = await EmailVerificationToken.verifyAndUse(email, token);
+    if (!record) return res.status(400).json({ error: 'Invalid or expired verification token' });
+
+    // Ensure column exists, then mark as verified (do not change status here)
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE`);
+    } catch (_) {}
+    await pool.query(`UPDATE users SET is_verified = TRUE WHERE user_id = $1`, [record.user_id]);
+    res.json({ message: 'Email verified successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -279,38 +361,45 @@ export const forgotPassword = async (req, res) => {
 
     // ✅ Styled HTML email
     const html = `
-      <div style="font-family: Arial, sans-serif; background: #f9fafb; padding: 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 20px; border: 1px solid #e5e7eb;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <img src="logo.png" 
-     alt="VisionIndex Logo" width="80" style="border-radius: 50%;" />
-          </div>
-          <h2 style="color: #111827;">Hello ${user.username || 'User'},</h2>
-          <p style="color: #374151; font-size: 15px;">
-            We received a request to reset your password. Click the button below to set a new password.
-            This link will expire in <b>30 minutes</b>.
-          </p>
-          ${
-            resetUrl
-              ? `<div style="text-align: center; margin: 30px 0;">
-                  <a href="${resetUrl}" 
-                    style="background: #2563eb; color: #ffffff; text-decoration: none; 
-                           padding: 12px 24px; border-radius: 6px; font-weight: bold; display: inline-block;">
-                    Reset Password
-                  </a>
-                 </div>`
-              : ''
-          }
-          <p style="color: #6b7280; font-size: 14px;">
-            If you did not request this, you can safely ignore this email.
-          </p>
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-          <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-            &copy; ${new Date().getFullYear()} VisionIndex. All rights reserved.
-          </p>
-        </div>
+    <div style="font-family: Arial, sans-serif; background-color: #f9fafb; padding: 30px;">
+      <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 30px; text-align: center;">
+        
+        <h2 style="font-size: 22px; margin-bottom: 20px; font-weight: 600; color: #111827;">
+          Reset Your Password
+        </h2>
+        
+        <p style="font-size: 15px; color: #374151; margin-bottom: 20px; text-align: left;">
+          Hi ${user.username || 'User'},
+        </p>
+        
+        <p style="font-size: 15px; color: #374151; margin-bottom: 30px; text-align: left;">
+          Tap the button below to reset your customer account password.<br />
+          If you didn’t request a new password, you can safely delete this email.
+        </p>
+  
+        ${
+          resetUrl
+            ? `<div style="margin: 30px 0;">
+                <a href="${resetUrl}" 
+                  style="background: #6d5dfc; color: #ffffff; text-decoration: none;
+                         padding: 12px 30px; border-radius: 6px; font-weight: 500; display: inline-block;">
+                  Reset Password
+                </a>
+               </div>
+               <p style="font-size: 13px; color: #6b7280; margin-top: 20px; text-align: left;">
+                 If that doesn't work, copy and paste the following link in your browser:<br />
+                 <a href="${resetUrl}" style="color: #6d5dfc; text-decoration: none;">${resetUrl}</a>
+               </p>`
+            : ''
+        }
+  
+        <p style="font-size: 14px; color: #111827; margin-top: 40px; text-align: left;">
+          The Spry Team.
+        </p>
       </div>
-    `;
+    </div>
+  `;
+  
 
     // ✅ Plain-text fallback
     const text = resetUrl
@@ -320,8 +409,21 @@ export const forgotPassword = async (req, res) => {
     const smtpConfigured = !!process.env.SMTP_HOST;
     try {
       if (smtpConfigured && resetUrl) {
-        await sendMail({ to: email, subject, html, text });
-      } else {
+        await sendMail({
+          to: email,
+          subject,
+          html,
+          text,
+          attachments: [
+            {
+              filename: 'logo.png',
+              path: logoPath,   // absolute path to logo
+              cid: 'logoImage',  // must match img src="cid:logoImage"
+              contentDisposition: 'inline'
+            }
+          ]
+        });
+      }  else {
         console.warn('SMTP not configured. Skipping email send.');
         if (resetUrl) console.info('DEV RESET LINK:', resetUrl);
       }

@@ -1,6 +1,8 @@
 import { User } from '../models/User.js';
 import { UserPermission } from '../models/UserPermission.js';
 import bcrypt from 'bcrypt';
+import EmailVerificationToken from '../models/EmailVerificationToken.js';
+import { sendMail } from '../config/mailer.js';
 
 
 // Get all users
@@ -33,12 +35,44 @@ export const createUser = async (req, res) => {
     // Hash password here
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Ensure is_verified column exists for new users
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE`);
+    } catch (_) {}
+
     const user = await User.create({
       username,
       email,
       passwordhash: hashedPassword, // ✅ store hashed
       roleId
     });
+
+    // Send email verification to the newly created user
+    try {
+      const rawToken = EmailVerificationToken.generateToken();
+      await EmailVerificationToken.createForUser(user.user_id, rawToken, 24);
+
+      const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const verifyUrl = `${frontendBase}/verify-email?email=${encodeURIComponent(email)}&token=${encodeURIComponent(rawToken)}`;
+      const subject = 'Verify your VisionIndex account';
+      const html = `
+        <p>Hello ${username || ''},</p>
+        <p>Your account was created by an administrator. Please verify your email to activate your account.</p>
+        <p><a href="${verifyUrl}">Verify Email</a></p>
+        <p>This link expires in 24 hours.</p>
+      `;
+      const text = `Verify your email: ${verifyUrl}`;
+
+      const smtpConfigured = !!(process.env.SMTP_HOST);
+      if (smtpConfigured) {
+        await sendMail({ to: email, subject, html, text });
+      } else {
+        console.warn('SMTP not configured. Skipping verification email for created user.');
+        console.info('DEV VERIFY LINK (created user):', verifyUrl);
+      }
+    } catch (mailErr) {
+      console.warn('Email verification send failed for created user:', mailErr?.message || mailErr);
+    }
 
     res.status(201).json(user);
   } catch (err) {
