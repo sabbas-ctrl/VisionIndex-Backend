@@ -144,6 +144,11 @@ export const login = async (req, res) => {
 
     res.json({ 
       message: 'Login successful',
+      user: {
+        user_id: user.user_id,
+        username: user.username,
+        email: user.email
+      },
       sessionInfo: {
         tokenId: refreshTokenRecord.token_id,
         deviceInfo: refreshTokenRecord.device_info,

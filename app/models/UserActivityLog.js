@@ -117,6 +117,58 @@ export class UserActivityLog {
     return result.rows;
   }
 
+  static async getFilteredActivity(filters, limit = 100, offset = 0) {
+    let query = `
+      SELECT 
+        ual.*,
+        u.username,
+        r.role_name,
+        us.device_info
+      FROM user_activity_log ual
+      LEFT JOIN users u ON ual.user_id = u.user_id
+      LEFT JOIN roles r ON u.role_id = r.role_id
+      LEFT JOIN user_sessions us ON ual.session_id = us.session_id
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    let paramCount = 0;
+
+    if (filters.userId) {
+      paramCount++;
+      query += ` AND ual.user_id = $${paramCount}`;
+      params.push(filters.userId);
+    }
+
+    if (filters.actionType) {
+      paramCount++;
+      query += ` AND ual.action_type = $${paramCount}`;
+      params.push(filters.actionType);
+    }
+
+    if (filters.status) {
+      paramCount++;
+      query += ` AND ual.status = $${paramCount}`;
+      params.push(filters.status);
+    }
+
+    if (filters.startDate && filters.endDate) {
+      paramCount++;
+      query += ` AND ual.timestamp >= $${paramCount}`;
+      params.push(filters.startDate);
+      
+      paramCount++;
+      query += ` AND ual.timestamp <= $${paramCount}`;
+      params.push(filters.endDate);
+    }
+
+    query += ` ORDER BY ual.timestamp DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+    return result.rows;
+  }
+
   static async getActivityStats(userId = null) {
     let query = `
       SELECT 
