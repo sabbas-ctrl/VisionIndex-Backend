@@ -7,7 +7,8 @@ import {
   refreshToken,
   getUserSessions,
   revokeSession,
-  revokeAllSessions
+  revokeAllSessions,
+  getUserProfile
 } from '../controllers/authController.js';
 import { authMiddleware, refreshTokenMiddleware } from '../middlewares/authMiddleware.js';
 import { activityLogger, authLogger } from '../middlewares/activityLogger.js';
@@ -40,6 +41,11 @@ router.post('/logout',
 router.get('/verify', 
   authMiddleware, 
   verifyAuth
+);
+router.get('/profile', 
+  authMiddleware, 
+  activityLogger('profile_view'),
+  getUserProfile
 );
 
 // Password reset routes
