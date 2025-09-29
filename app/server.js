@@ -37,6 +37,6 @@ app.listen(port, () => {
 });
 
 connectDB();
-connectMongoDB();  // MongoDB ✅
+// connectMongoDB();  // MongoDB ✅
 
 export default app;

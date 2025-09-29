@@ -5,6 +5,7 @@ import roleRoutes from './roleRoutes.js';
 import permissionRoutes from './permissionRoutes.js';
 import auditRoutes from './auditRoutes.js';
 import systemLogRoutes from './systemLogRoutes.js';
+import videoRoutes from './videoRoutes.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { activityLogger } from '../middlewares/activityLogger.js';
 
@@ -29,5 +30,6 @@ router.use('/roles', roleRoutes);
 router.use('/permissions', permissionRoutes);
 router.use('/audit', auditRoutes);
 router.use('/system', systemLogRoutes);
+router.use('/videos', videoRoutes);
 
 export default router;
