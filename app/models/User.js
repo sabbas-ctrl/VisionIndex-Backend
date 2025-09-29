@@ -52,14 +52,26 @@ export class User {
   }
 
   static async update(userId, { username, email, roleId, isActive }) {
-    const result = await pool.query(
-      `UPDATE users
-       SET username = $1, email = $2, role_id = $3, status = $4
-       WHERE user_id = $5
-       RETURNING *`,
-      [username, email, roleId, isActive ? 'active' : 'inactive', userId]
-    );
-    return result.rows[0];
+    // If isActive is not provided, preserve the existing status
+    if (isActive === undefined) {
+      const result = await pool.query(
+        `UPDATE users
+         SET username = $1, email = $2, role_id = $3
+         WHERE user_id = $4
+         RETURNING *`,
+        [username, email, roleId, userId]
+      );
+      return result.rows[0];
+    } else {
+      const result = await pool.query(
+        `UPDATE users
+         SET username = $1, email = $2, role_id = $3, status = $4
+         WHERE user_id = $5
+         RETURNING *`,
+        [username, email, roleId, isActive ? 'active' : 'inactive', userId]
+      );
+      return result.rows[0];
+    }
   }
 
     // Assign role
@@ -77,5 +89,18 @@ export class User {
     );
   
     return result.rows[0]; // will be undefined if no user found
+  }
+
+  // Get user permissions from role_permissions table only
+  static async getPermissions(userId) {
+    const result = await pool.query(
+      `SELECT p.permission_name
+       FROM users u
+       JOIN role_permissions rp ON u.role_id = rp.role_id
+       JOIN permissions p ON rp.permission_id = p.permission_id
+       WHERE u.user_id = $1`,
+      [userId]
+    );
+    return result.rows.map(row => row.permission_name);
   }
 }

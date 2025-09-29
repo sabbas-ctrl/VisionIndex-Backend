@@ -33,6 +33,11 @@ export const getPermissionById = async (req, res) => {
 export const deletePermission = async (req, res) => {
   try {
     const { id } = req.params;
+    // Prevent deletion if permission is assigned to any role
+    const inUse = await Permission.isAssignedToAnyRole(id);
+    if (inUse) {
+      return res.status(400).json({ error: 'Cannot delete permission while assigned to roles. Remove assignments first.' });
+    }
     await Permission.delete(id);
     res.json({ message: 'Permission deleted' });
   } catch (err) {
