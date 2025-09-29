@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import './jobs/tokenCleanupJob.js';
+import { startAnalyticsJobs } from './jobs/analyticsJob.js';
 import { connectDB } from './config/postgresql.js';
 import { connectMongoDB } from './config/mongodb.js'; 
 import routes from './routes/index.js';
@@ -37,6 +37,9 @@ app.listen(port, () => {
 });
 
 connectDB();
-// connectMongoDB();  // MongoDB ✅
+connectMongoDB();  // MongoDB ✅
+
+// Start analytics jobs
+startAnalyticsJobs();
 
 export default app;

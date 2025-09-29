@@ -145,3 +145,4 @@ ORDER BY v.upload_time DESC;
 -- GRANT USAGE ON SEQUENCE videos_video_id_seq TO your_app_user;
 -- GRANT USAGE ON SEQUENCE video_segments_segment_id_seq TO your_app_user;
 
+
