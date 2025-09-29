@@ -117,6 +117,15 @@ export const login = async (req, res) => {
     // Get user permissions from role_permissions table
     const permissions = await User.getPermissions(user.user_id);
 
+    // Get user role information
+    const roleResult = await pool.query(
+      `SELECT r.role_id, r.role_name, r.description 
+       FROM roles r 
+       WHERE r.role_id = $1`,
+      [user.role_id]
+    );
+    const userRole = roleResult.rows[0];
+
     // Create access token with userId and permissions for security
     const accessToken = jwt.sign(
       { 
@@ -144,6 +153,17 @@ export const login = async (req, res) => {
 
     res.json({ 
       message: 'Login successful',
+      user: {
+        user_id: user.user_id,
+        username: user.username,
+        email: user.email
+      },
+      role: {
+        role_id: userRole.role_id,
+        role_name: userRole.role_name,
+        description: userRole.description
+      },
+      permissions: permissions,
       sessionInfo: {
         tokenId: refreshTokenRecord.token_id,
         deviceInfo: refreshTokenRecord.device_info,
@@ -245,6 +265,49 @@ export const verifyAuth = async (req, res) => {
       authenticated: true, 
       userId: req.user.userId,
       permissions: req.user.permissions || []
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getUserProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    // Get user information
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get user role information
+    const roleResult = await pool.query(
+      `SELECT r.role_id, r.role_name, r.description 
+       FROM roles r 
+       WHERE r.role_id = $1`,
+      [user.role_id]
+    );
+    const userRole = roleResult.rows[0];
+
+    // Get user permissions
+    const permissions = await User.getPermissions(userId);
+
+    res.json({
+      user: {
+        user_id: user.user_id,
+        username: user.username,
+        email: user.email,
+        status: user.status,
+        last_login: user.last_login,
+        created_at: user.created_at
+      },
+      role: {
+        role_id: userRole.role_id,
+        role_name: userRole.role_name,
+        description: userRole.description
+      },
+      permissions: permissions
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

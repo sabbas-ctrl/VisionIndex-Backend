@@ -31,12 +31,47 @@ export const getActivityLogs = async (req, res) => {
     let logs;
     if (search) {
       logs = await UserActivityLog.searchActivity(search, filters, parseInt(limit), offset);
+    } else if (Object.keys(filters).length > 0) {
+      // Apply filters even without search
+      logs = await UserActivityLog.getFilteredActivity(filters, parseInt(limit), offset);
     } else {
       logs = await UserActivityLog.getRecentActivity(parseInt(limit), offset);
     }
 
-    // Get total count for pagination
-    const totalCount = await pool.query('SELECT COUNT(*) as count FROM user_activity_log');
+    // Get total count for pagination (respecting filters)
+    let countQuery = 'SELECT COUNT(*) as count FROM user_activity_log ual WHERE 1=1';
+    const countParams = [];
+    let countParamCount = 0;
+
+    if (filters.userId) {
+      countParamCount++;
+      countQuery += ` AND ual.user_id = $${countParamCount}`;
+      countParams.push(filters.userId);
+    }
+
+    if (filters.actionType) {
+      countParamCount++;
+      countQuery += ` AND ual.action_type = $${countParamCount}`;
+      countParams.push(filters.actionType);
+    }
+
+    if (filters.status) {
+      countParamCount++;
+      countQuery += ` AND ual.status = $${countParamCount}`;
+      countParams.push(filters.status);
+    }
+
+    if (filters.startDate && filters.endDate) {
+      countParamCount++;
+      countQuery += ` AND ual.timestamp >= $${countParamCount}`;
+      countParams.push(filters.startDate);
+      
+      countParamCount++;
+      countQuery += ` AND ual.timestamp <= $${countParamCount}`;
+      countParams.push(filters.endDate);
+    }
+
+    const totalCount = await pool.query(countQuery, countParams);
     const totalPages = Math.ceil(totalCount.rows[0].count / limit);
 
     res.json({

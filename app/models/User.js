@@ -52,14 +52,26 @@ export class User {
   }
 
   static async update(userId, { username, email, roleId, isActive }) {
-    const result = await pool.query(
-      `UPDATE users
-       SET username = $1, email = $2, role_id = $3, status = $4
-       WHERE user_id = $5
-       RETURNING *`,
-      [username, email, roleId, isActive ? 'active' : 'inactive', userId]
-    );
-    return result.rows[0];
+    // If isActive is not provided, preserve the existing status
+    if (isActive === undefined) {
+      const result = await pool.query(
+        `UPDATE users
+         SET username = $1, email = $2, role_id = $3
+         WHERE user_id = $4
+         RETURNING *`,
+        [username, email, roleId, userId]
+      );
+      return result.rows[0];
+    } else {
+      const result = await pool.query(
+        `UPDATE users
+         SET username = $1, email = $2, role_id = $3, status = $4
+         WHERE user_id = $5
+         RETURNING *`,
+        [username, email, roleId, isActive ? 'active' : 'inactive', userId]
+      );
+      return result.rows[0];
+    }
   }
 
     // Assign role

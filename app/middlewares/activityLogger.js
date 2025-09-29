@@ -17,8 +17,36 @@ export const activityLogger = (actionType, options = {}) => {
     const ipAddress = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
 
-    // Skip logging if no user context
-    if (!userId) {
+    // Skip logging if no user context, except for login events
+    if (!userId && actionType !== 'login') {
+      return next();
+    }
+
+    // Skip logging for pagination requests to prevent audit log pollution
+    // This prevents every page turn from creating audit entries
+    const paginationActionTypes = [
+      'audit_read', 'user_activity_read', 'session_activity_read',
+      'system_logs_read', 'flags_read', 'user_list_read', 
+      'role_list_read', 'permission_list_read'
+    ];
+    
+    // Check for pagination in multiple ways to be more robust
+    const pageParam = req.query.page || req.query.p || req.query.pageNumber;
+    const isPaginationHeader = req.headers['x-pagination-request'] === 'true';
+    const isPaginationRequest = paginationActionTypes.includes(actionType) && 
+                               (isPaginationHeader || (pageParam && parseInt(pageParam) > 1));
+    
+    // Skip logging for role list reads when they're part of user page loads
+    const isUserPageRoleRequest = actionType === 'role_list_read' && 
+                                 req.headers['x-user-page-request'] === 'true';
+    
+    // Skip logging for supporting API calls when they're part of permissions page loads
+    const isPermissionsPageRequest = req.headers['x-permissions-page-request'] === 'true' &&
+                                   (actionType === 'role_list_read' || 
+                                    actionType === 'role_permissions_read' || 
+                                    actionType === 'permission_list_read');
+    
+    if (isPaginationRequest || isUserPageRoleRequest || isPermissionsPageRequest) {
       return next();
     }
 
@@ -28,12 +56,89 @@ export const activityLogger = (actionType, options = {}) => {
       const processingTime = endTime - startTime;
       const status = res.statusCode >= 200 && res.statusCode < 300 ? 'success' : 'failure';
 
+      // For login events, try to get userId from response data or request body
+      let finalUserId = userId;
+      let finalTargetId = options.targetId ? options.targetId(req) : null;
+      let finalDetails = options.details ? options.details(req, res, data) : null;
+      
+      if (actionType === 'login' && !userId && status === 'success') {
+        // Try to extract userId from response data or request body
+        try {
+          const responseData = typeof data === 'string' ? JSON.parse(data) : data;
+          if (responseData?.user?.user_id) {
+            finalUserId = responseData.user.user_id;
+          } else if (req.body?.email) {
+            // If we can't get userId from response, we'll log with email as targetId
+            // and set userId to null (will be handled by the database)
+            finalUserId = null;
+          }
+        } catch (e) {
+          // If parsing fails, keep userId as null
+          finalUserId = null;
+        }
+      }
+      
+      // For role operations, enhance targetId and details with role name from response
+      if ((actionType === 'role_update' || actionType === 'role_create' || actionType === 'role_delete') && status === 'success') {
+        try {
+          const responseData = typeof data === 'string' ? JSON.parse(data) : data;
+          if (responseData?.role_name) {
+            finalTargetId = responseData.role_name;
+            finalDetails = {
+              ...finalDetails,
+              roleName: responseData.role_name,
+              roleId: responseData.role_id,
+              description: responseData.description
+            };
+          }
+        } catch (e) {
+          // If parsing fails, keep original values
+        }
+      }
+      
+      // For user operations, enhance targetId and details with user name from response
+      if ((actionType === 'user_create' || actionType === 'user_update' || actionType === 'user_delete') && status === 'success') {
+        try {
+          const responseData = typeof data === 'string' ? JSON.parse(data) : data;
+          if (responseData?.username) {
+            finalTargetId = responseData.username;
+            finalDetails = {
+              ...finalDetails,
+              username: responseData.username,
+              email: responseData.email,
+              user_id: responseData.user_id
+            };
+          }
+        } catch (e) {
+          // If parsing fails, keep original values
+        }
+      }
+      
+      // For permission operations, enhance targetId and details with role and permission names from response
+      if ((actionType === 'role_permission_assign' || actionType === 'role_permission_remove') && status === 'success') {
+        try {
+          const responseData = typeof data === 'string' ? JSON.parse(data) : data;
+          if (responseData?.role_name && responseData?.permission_name) {
+            finalTargetId = `${responseData.role_name} - ${responseData.permission_name}`;
+            finalDetails = {
+              ...finalDetails,
+              role_name: responseData.role_name,
+              role_id: responseData.role_id,
+              permission_name: responseData.permission_name,
+              permission_id: responseData.permission_id
+            };
+          }
+        } catch (e) {
+          // If parsing fails, keep original values
+        }
+      }
+
       // Prepare activity log data
       const activityData = {
-        userId,
+        userId: finalUserId,
         sessionId,
         actionType,
-        targetId: options.targetId ? options.targetId(req) : null,
+        targetId: finalTargetId,
         ipAddress,
         status,
         details: {
@@ -42,7 +147,7 @@ export const activityLogger = (actionType, options = {}) => {
           userAgent,
           processingTime,
           statusCode: res.statusCode,
-          ...options.details?.(req, res, data)
+          ...finalDetails
         }
       };
 

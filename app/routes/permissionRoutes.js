@@ -20,6 +20,16 @@ router.post('/',
   }),
   createPermission
 );
+
+// Special route for permissions page access (logs "permissions viewed")
+router.get('/page', 
+  authMiddleware, 
+  activityLogger('permissions_viewed'),
+  (req, res) => {
+    res.json({ message: 'Permissions page accessed' });
+  }
+);
+
 router.get('/', 
   authMiddleware, 
   activityLogger('permission_list_read'),
