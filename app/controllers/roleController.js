@@ -68,6 +68,9 @@ export const deleteRole = async (req, res) => {
     
     const deleted = await Role.delete(id);
     if (!deleted) return res.status(404).json({ error: 'Role not found' });
+    if (deleted.blocked && deleted.reason === 'ROLE_HAS_ASSIGNED_USERS') {
+      return res.status(409).json({ error: 'Role has users assigned and cannot be deleted', assignedUsers: deleted.assignedUsers });
+    }
     
     // Return role info for audit logging
     res.json({ 

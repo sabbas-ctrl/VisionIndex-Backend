@@ -19,6 +19,7 @@ export class User {
         u.email,
         u.status,
         u.role_id,
+        u.is_verified,
         r.role_name
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.role_id

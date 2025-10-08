@@ -32,6 +32,11 @@ export const createUser = async (req, res) => {
   try {
     const { username, email, password, roleId } = req.body;
 
+    // Validate password length
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
     // Hash password here
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -84,8 +89,23 @@ export const createUser = async (req, res) => {
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, email, roleId, isActive } = req.body;
-    const user = await User.update(id, { username, email, roleId, isActive });
+    const { username, email, roleId, isActive, password } = req.body;
+    
+    // Validate password length if provided
+    if (password && password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    // Prepare update data
+    const updateData = { username, email, roleId, isActive };
+    
+    // Hash password if provided
+    if (password) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      updateData.passwordhash = hashedPassword;
+    }
+
+    const user = await User.update(id, updateData);
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
   } catch (err) {

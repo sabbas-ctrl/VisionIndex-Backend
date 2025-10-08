@@ -42,6 +42,16 @@ export class Role {
   }
 
   static async delete(roleId) {
+    // Check if any users are assigned to this role
+    const usersCountResult = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM users WHERE role_id = $1',
+      [roleId]
+    );
+    const assignedUsers = usersCountResult.rows[0]?.count || 0;
+    if (assignedUsers > 0) {
+      return { blocked: true, reason: 'ROLE_HAS_ASSIGNED_USERS', assignedUsers };
+    }
+
     await pool.query('DELETE FROM roles WHERE role_id = $1', [roleId]);
     return { message: 'Role deleted' };
   }

@@ -22,9 +22,9 @@ async function seedMongoDB() {
     console.log('✅ Connected to MongoDB');
 
     // Clear existing data
-    await VideoProcessing.deleteMany({});
-    await SearchQueryAnalysis.deleteMany({});
-    await VectorEmbeddings.deleteMany({});
+    // await VideoProcessing.deleteMany({});
+    // await SearchQueryAnalysis.deleteMany({});
+    // await VectorEmbeddings.deleteMany({});
     await SystemLog.deleteMany({});
     await Flag.deleteMany({});
     console.log('🧹 Cleared existing data');
@@ -74,12 +74,12 @@ async function seedMongoDB() {
         ],
         embeddings: [
           {
-            type: 'face_embedding_1',
+            type: 'face_embedding',
             model: 'facenet',
             vector_id: 'face_001_embedding'
           },
           {
-            type: 'person_embedding_1',
+            type: 'person_embedding',
             model: 'clip-vit-large',
             vector_id: 'person_001_embedding'
           }
@@ -123,7 +123,7 @@ async function seedMongoDB() {
         ],
         embeddings: [
           {
-            type: 'face_embedding_2',
+            type: 'face_embedding',
             model: 'facenet',
             vector_id: 'face_002_embedding'
           }
@@ -138,8 +138,8 @@ async function seedMongoDB() {
       }
     ];
 
-    await VideoProcessing.insertMany(videoProcessingData);
-    console.log('✅ Video processing data seeded');
+    // await VideoProcessing.insertMany(videoProcessingData);
+    // console.log('✅ Video processing data seeded');
 
     // Seed Search Query Analysis data
     const searchAnalysisData = [
@@ -201,8 +201,8 @@ async function seedMongoDB() {
       }
     ];
 
-    await SearchQueryAnalysis.insertMany(searchAnalysisData);
-    console.log('✅ Search query analysis data seeded');
+    // await SearchQueryAnalysis.insertMany(searchAnalysisData);
+    // console.log('✅ Search query analysis data seeded');
 
     // Seed Vector Embeddings data
     const vectorEmbeddingsData = [
@@ -252,8 +252,8 @@ async function seedMongoDB() {
       }
     ];
 
-    await VectorEmbeddings.insertMany(vectorEmbeddingsData);
-    console.log('✅ Vector embeddings data seeded');
+    // await VectorEmbeddings.insertMany(vectorEmbeddingsData);
+    // console.log('✅ Vector embeddings data seeded');
 
     // Seed System Logs data
     const systemLogsData = [
@@ -271,7 +271,7 @@ async function seedMongoDB() {
         timestamp: new Date()
       },
       {
-        level: 'warning',
+        level: 'warn',
         message: 'High GPU usage detected',
         module: 'resource_monitor',
         trace_id: 'trace_002',
@@ -310,6 +310,7 @@ async function seedMongoDB() {
         session_id: 'session_001',
         linked_action_id: 1,
         status: 'new',
+        priority: 'medium',
         details: {
           search_params: ['face_id: 3321'],
           frequency: 18,
@@ -318,12 +319,13 @@ async function seedMongoDB() {
         created_at: new Date()
       },
       {
-        flag_type: 'processing_anomaly',
+        flag_type: 'performance_issue',
         message: 'Unusually long video processing time',
         user_id: 2,
         session_id: 'session_002',
         linked_action_id: 2,
         status: 'investigating',
+        priority: 'high',
         details: {
           processing_time: '120s',
           expected_time: '60s',

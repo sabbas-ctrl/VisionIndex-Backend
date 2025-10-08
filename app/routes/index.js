@@ -8,18 +8,24 @@ import systemLogRoutes from './systemLogRoutes.js';
 import videoRoutes from './videoRoutes.js';
 import analyticsRoutes from './analyticsRoutes.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
-import { activityLogger } from '../middlewares/activityLogger.js';
+import { activityLogger, anomalyDetector } from '../middlewares/activityLogger.js';
 
 const router = express.Router();
 
-// Dashboard route with activity logging
+// Dashboard route with activity logging and anomaly detection
 router.get('/dashboard', 
   authMiddleware, 
+  anomalyDetector({
+    rateLimitCheck: true,
+    accessPatternCheck: true,
+    queryCheck: true,
+    errorRateCheck: true
+  }),
   activityLogger('dashboard_access'),
   (req, res) => {
     res.json({ 
       message: 'Dashboard accessed',
-      user: req.user.userId,
+      user: req.user.userId || req.user.user_id,
       timestamp: new Date().toISOString()
     });
   }

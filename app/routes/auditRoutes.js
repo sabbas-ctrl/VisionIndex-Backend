@@ -8,6 +8,7 @@ import {
   getAuditTrails,
   getAuditTrailById,
   exportAuditTrail,
+  exportActivityLogs,
   getAuditStats,
   getUserSessions,
   terminateSession,
@@ -15,12 +16,20 @@ import {
   getSessionStats
 } from '../controllers/auditController.js';
 import { authMiddleware, requirePermission } from '../middlewares/authMiddleware.js';
-import { activityLogger } from '../middlewares/activityLogger.js';
+import { activityLogger, anomalyDetector } from '../middlewares/activityLogger.js';
 
 const router = express.Router();
 
 // Apply authentication middleware to all routes
 router.use(authMiddleware);
+
+// Apply anomaly detection to all audit routes (sensitive endpoints)
+router.use(anomalyDetector({
+  rateLimitCheck: true,
+  accessPatternCheck: true,
+  queryCheck: true,
+  errorRateCheck: true
+}));
 
 // Activity Log Routes
 router.get('/activity', 
@@ -44,6 +53,12 @@ router.get('/activity/session/:sessionId',
   requirePermission('audit.read'), 
   activityLogger('session_activity_read'),
   getSessionActivity
+);
+
+router.get('/activity/export', 
+  requirePermission('audit.export'), 
+  activityLogger('audit_export'),
+  exportActivityLogs
 );
 
 // Audit Trail Routes

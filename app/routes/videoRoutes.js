@@ -1,14 +1,24 @@
 import express from 'express';
 import { VideoController } from '../controllers/videoController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
+import { anomalyDetector } from '../middlewares/activityLogger.js';
 
 const router = express.Router();
 
 // Apply authentication middleware to all routes
 router.use(authMiddleware);
 
+// Apply anomaly detection to all video routes
+router.use(anomalyDetector({
+  rateLimitCheck: true,
+  accessPatternCheck: true,
+  queryCheck: true,
+  errorRateCheck: true
+}));
+
 // Upload routes
 router.post('/upload-url', VideoController.getUploadUrl);
+router.post('/upload', VideoController.uploadVideo);
 router.post('/register', VideoController.registerVideo);
 
 // Video management routes

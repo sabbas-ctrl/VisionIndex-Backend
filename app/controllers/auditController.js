@@ -184,7 +184,7 @@ export const createAuditTrail = async (req, res) => {
       statuses = []
     } = req.body;
 
-    const exportedByUserId = req.user.userId;
+    const exportedByUserId = req.user.userId || req.user.user_id;
 
     // Build query to get logs based on filters
     let query = `
@@ -435,5 +435,103 @@ export const getSessionStats = async (req, res) => {
   } catch (error) {
     console.error('Error fetching session stats:', error);
     res.status(500).json({ error: 'Failed to fetch session stats' });
+  }
+};
+
+// Export all audit activity logs
+export const exportActivityLogs = async (req, res) => {
+  try {
+    const { 
+      format = 'csv', 
+      userId, 
+      actionType, 
+      status, 
+      startDate, 
+      endDate,
+      limit = 1000 
+    } = req.query;
+
+    // Build query conditions
+    let whereConditions = [];
+    let queryParams = [];
+    let paramCount = 0;
+
+    if (userId) {
+      paramCount++;
+      whereConditions.push(`user_id = $${paramCount}`);
+      queryParams.push(userId);
+    }
+
+    if (actionType) {
+      paramCount++;
+      whereConditions.push(`action_type = $${paramCount}`);
+      queryParams.push(actionType);
+    }
+
+    if (status) {
+      paramCount++;
+      whereConditions.push(`status = $${paramCount}`);
+      queryParams.push(status);
+    }
+
+    if (startDate && endDate) {
+      paramCount++;
+      whereConditions.push(`timestamp >= $${paramCount}`);
+      queryParams.push(startDate);
+      paramCount++;
+      whereConditions.push(`timestamp <= $${paramCount}`);
+      queryParams.push(endDate);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    const query = `
+      SELECT 
+        ual.log_id,
+        ual.user_id,
+        u.username,
+        r.role_name,
+        ual.action_type,
+        ual.target_id,
+        ual.status,
+        ual.ip_address,
+        ual.details,
+        ual.timestamp
+      FROM user_activity_log ual
+      LEFT JOIN users u ON ual.user_id = u.user_id
+      LEFT JOIN roles r ON u.role_id = r.role_id
+      ${whereClause}
+      ORDER BY ual.timestamp DESC
+      LIMIT $${paramCount + 1}
+    `;
+    
+    queryParams.push(parseInt(limit));
+
+    const result = await pool.query(query, queryParams);
+    const logs = result.rows;
+
+    if (format === 'csv') {
+      // Generate CSV
+      const csvHeader = 'Log ID,User ID,Username,Role,Action Type,Target ID,Status,IP Address,Details,Timestamp\n';
+      const csvRows = logs.map(log => 
+        `"${log.log_id}","${log.user_id || 'N/A'}","${log.username || 'N/A'}","${log.role_name || 'N/A'}","${log.action_type}","${log.target_id || 'N/A'}","${log.status}","${log.ip_address || 'N/A'}","${JSON.stringify(log.details || {})}","${log.timestamp}"`
+      ).join('\n');
+      
+      const csvContent = csvHeader + csvRows;
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="audit_activity_${new Date().toISOString().split('T')[0]}.csv"`);
+      res.send(csvContent);
+    } else {
+      res.json({
+        exportedAt: new Date(),
+        totalLogs: logs.length,
+        filters: { userId, actionType, status, startDate, endDate },
+        logs
+      });
+    }
+  } catch (error) {
+    console.error('Error exporting activity logs:', error);
+    res.status(500).json({ error: 'Failed to export activity logs' });
   }
 };

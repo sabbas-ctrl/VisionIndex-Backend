@@ -8,7 +8,8 @@ import {
   getUserSessions,
   revokeSession,
   revokeAllSessions,
-  getUserProfile
+  getUserProfile,
+  changePassword
 } from '../controllers/authController.js';
 import { authMiddleware, refreshTokenMiddleware } from '../middlewares/authMiddleware.js';
 import { activityLogger, authLogger } from '../middlewares/activityLogger.js';
@@ -46,6 +47,15 @@ router.get('/profile',
   authMiddleware, 
   activityLogger('profile_view'),
   getUserProfile
+);
+
+// Change password route
+router.post('/change-password', 
+  authMiddleware,
+  activityLogger('password_change', {
+    details: (req) => ({ userId: req.user.userId })
+  }),
+  changePassword
 );
 
 // Password reset routes
