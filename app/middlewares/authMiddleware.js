@@ -6,20 +6,25 @@ export const authMiddleware = (req, res, next) => {
   console.log(`🔍 Auth midd-leware called for ${req.method} ${req.originalUrl}`);
   const token = req.cookies.accessToken;
   if (!token) {
-    // Log missing token asynchronously
-    setImmediate(async () => {
-      try {
-        console.log('🔍 Attempting to log missing token error...');
-        await ErrorLogger.logAuthError(
-          new Error('Missing token'), 
-          req, 
-          'missing_token'
-        );
-        console.log('✅ Successfully logged missing token error');
-      } catch (logError) {
-        console.error('❌ Failed to log auth error:', logError);
-      }
-    });
+    // Don't log missing token errors for /auth/verify endpoint as it's used for checking auth status
+    const isVerifyEndpoint = req.originalUrl === '/auth/verify';
+    
+    if (!isVerifyEndpoint) {
+      // Log missing token asynchronously for other endpoints
+      setImmediate(async () => {
+        try {
+          console.log('🔍 Attempting to log missing token error...');
+          await ErrorLogger.logAuthError(
+            new Error('Missing token'), 
+            req, 
+            'missing_token'
+          );
+          console.log('✅ Successfully logged missing token error');
+        } catch (logError) {
+          console.error('❌ Failed to log auth error:', logError);
+        }
+      });
+    }
     return res.status(401).json({ error: 'Missing token' });
   }
 

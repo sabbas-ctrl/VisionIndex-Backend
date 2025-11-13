@@ -32,6 +32,15 @@ export const createUser = async (req, res) => {
   try {
     const { username, email, password, roleId } = req.body;
 
+    // Basic email validation and blocklist check
+    try {
+      const { validateEmailOrThrow } = await import('../utils/emailValidator.js');
+      validateEmailOrThrow(email);
+    } catch (e) {
+      const status = e?.statusCode || 400;
+      return res.status(status).json({ error: e?.message || 'Invalid email' });
+    }
+
     // Validate password length
     if (!password || password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters long' });

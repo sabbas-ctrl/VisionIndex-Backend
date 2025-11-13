@@ -6,6 +6,15 @@ import s3Config from '../config/s3.js';
 import crypto from 'crypto';
 import { activityLogger } from '../middlewares/activityLogger.js';
 
+// Helper function to format duration from seconds to HH:MM:SS format
+const formatDuration = (seconds) => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
 export class VideoController {
   // Get presigned URL for direct upload to S3
   static async getUploadUrl(req, res) {
@@ -179,7 +188,7 @@ export class VideoController {
         original_name: originalName,
         storage_path: s3Config.getFileUrl(fileName),
         file_size: fileSize,
-        duration: duration ? `${duration}s` : null,
+        duration: duration ? formatDuration(duration) : null,
         resolution: resolution,
         checksum: checksum,
         labels: labels,

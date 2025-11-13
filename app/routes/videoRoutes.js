@@ -1,7 +1,7 @@
 import express from 'express';
 import { VideoController } from '../controllers/videoController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
-import { anomalyDetector } from '../middlewares/activityLogger.js';
+import { anomalyDetector, activityLogger } from '../middlewares/activityLogger.js';
 
 const router = express.Router();
 
@@ -15,6 +15,18 @@ router.use(anomalyDetector({
   queryCheck: true,
   errorRateCheck: true
 }));
+
+// Video upload page access - log when user visits upload page
+router.get('/upload-page', 
+  activityLogger('video_upload_page_access'),
+  (req, res) => {
+    res.json({ 
+      message: 'Video upload page accessed',
+      user: req.user.userId || req.user.user_id,
+      timestamp: new Date().toISOString()
+    });
+  }
+);
 
 // Upload routes
 router.post('/upload-url', VideoController.getUploadUrl);

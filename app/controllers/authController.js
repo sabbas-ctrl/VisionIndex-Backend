@@ -37,6 +37,15 @@ console.log(logoBase64.slice(0, 100));
 export const register = async (req, res) => {
   try {
     const { username, email, password, roleId } = req.body;
+
+    // Validate email using shared validator (format + blocklist)
+    try {
+      const { validateEmailOrThrow } = await import('../utils/emailValidator.js');
+      validateEmailOrThrow(email);
+    } catch (e) {
+      const status = e?.statusCode || 400;
+      return res.status(status).json({ error: e?.message || 'Invalid email' });
+    }
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
