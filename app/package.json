@@ -42,8 +42,8 @@
   "license": "MIT",
   "description": "Backend for VisionIndex a post-event facial recognition system that analyzes CCTV recordings to track and log individual presence across institutional zones for attendance and security auditing.",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.899.0",
-    "@aws-sdk/s3-request-presigner": "^3.899.0",
+    "@aws-sdk/client-s3": "^3.948.0",
+    "@aws-sdk/s3-request-presigner": "^3.948.0",
     "bcrypt": "^6.0.0",
     "chai-http": "^5.1.2",
     "cookie-parser": "^1.4.7",
