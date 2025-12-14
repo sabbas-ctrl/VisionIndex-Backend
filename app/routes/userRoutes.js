@@ -15,9 +15,17 @@ import {
   requirePermission, 
   requireAnyPermission 
 } from '../middlewares/authMiddleware.js';
-import { activityLogger } from '../middlewares/activityLogger.js';
+import { activityLogger, anomalyDetector } from '../middlewares/activityLogger.js';
 
 const router = express.Router();
+
+// Apply anomaly detection to all user routes
+router.use(anomalyDetector({
+  rateLimitCheck: true,
+  accessPatternCheck: true,
+  queryCheck: true,
+  errorRateCheck: true
+}));
 
 // User CRUD operations - require user management permissions
 router.get('/', 

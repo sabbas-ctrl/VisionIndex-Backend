@@ -170,35 +170,7 @@ systemLogSchema.statics.getSystemStats = function() {
   ]);
 };
 
-systemLogSchema.statics.searchLogs = function(query, filters = {}, limit = 100) {
-  const searchQuery = {
-    $text: { $search: query }
-  };
-
-  // Apply additional filters
-  if (filters.level) {
-    searchQuery.level = filters.level;
-  }
-  if (filters.module) {
-    searchQuery.module = filters.module;
-  }
-  if (filters.host) {
-    searchQuery.host = filters.host;
-  }
-  if (filters.user_id) {
-    searchQuery.user_id = filters.user_id;
-  }
-  if (filters.start_date && filters.end_date) {
-    searchQuery.timestamp = {
-      $gte: new Date(filters.start_date),
-      $lte: new Date(filters.end_date)
-    };
-  }
-
-  return this.find(searchQuery)
-    .sort({ timestamp: -1 })
-    .limit(limit);
-};
+// Removed searchLogs method - search is now handled directly in controller
 
 // Instance methods
 systemLogSchema.methods.toJSON = function() {

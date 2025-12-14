@@ -1,5 +1,6 @@
 import pkg from 'pg';
 import dotenv from 'dotenv';
+import { ErrorLogger } from '../utils/errorLogger.js';
 const { Pool } = pkg;
 dotenv.config();
 
@@ -25,6 +26,33 @@ export const connectDB = async () => {
     client.release();
   } catch (err) {
     console.error('❌ DB connection error:', err.message);
+    // Log database connection error
+    await ErrorLogger.logDatabaseError(err, null, {
+      actionType: 'database_connection',
+      details: {
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        database: process.env.DB_NAME
+      }
+    });
     process.exit(1);
+  }
+};
+
+// Enhanced pool with error logging
+const originalQuery = pool.query;
+pool.query = async function(text, params) {
+  try {
+    return await originalQuery.call(this, text, params);
+  } catch (error) {
+    // Log database query errors
+    await ErrorLogger.logDatabaseError(error, null, {
+      actionType: 'database_query',
+      details: {
+        query: text.substring(0, 200), // First 200 chars of query
+        params: params ? params.length : 0
+      }
+    });
+    throw error;
   }
 };

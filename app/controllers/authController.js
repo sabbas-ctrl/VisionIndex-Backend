@@ -37,6 +37,15 @@ console.log(logoBase64.slice(0, 100));
 export const register = async (req, res) => {
   try {
     const { username, email, password, roleId } = req.body;
+
+    // Validate email using shared validator (format + blocklist)
+    try {
+      const { validateEmailOrThrow } = await import('../utils/emailValidator.js');
+      validateEmailOrThrow(email);
+    } catch (e) {
+      const status = e?.statusCode || 400;
+      return res.status(status).json({ error: e?.message || 'Invalid email' });
+    }
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
@@ -191,7 +200,7 @@ export const logout = async (req, res) => {
 
     await pool.query(
       "UPDATE users SET status = 'inactive' WHERE user_id = $1",
-      [req.user.userId]   // coming from decoded JWT in middleware
+      [req.user.userId || req.user.user_id]   // coming from decoded JWT in middleware
     );
 
     // Clear both HttpOnly cookies
@@ -263,7 +272,7 @@ export const verifyAuth = async (req, res) => {
     // If we reach here, the authMiddleware has already verified the token
     res.json({ 
       authenticated: true, 
-      userId: req.user.userId,
+      userId: req.user.userId || req.user.user_id,
       permissions: req.user.permissions || []
     });
   } catch (err) {
@@ -273,7 +282,7 @@ export const verifyAuth = async (req, res) => {
 
 export const getUserProfile = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId || req.user.user_id;
     
     // Get user information
     const user = await User.findById(userId);
@@ -317,7 +326,7 @@ export const getUserProfile = async (req, res) => {
 // New endpoints for session management
 export const getUserSessions = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId || req.user.user_id;
     const sessions = await RefreshToken.findByUserId(userId);
     
     res.json({
@@ -338,7 +347,7 @@ export const getUserSessions = async (req, res) => {
 export const revokeSession = async (req, res) => {
   try {
     const { tokenId } = req.params;
-    const userId = req.user.userId;
+    const userId = req.user.userId || req.user.user_id;
     
     // Verify the token belongs to the current user
     const tokenInfo = await RefreshToken.getTokenInfo(tokenId);
@@ -355,7 +364,7 @@ export const revokeSession = async (req, res) => {
 
 export const revokeAllSessions = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId || req.user.user_id;
     await RefreshToken.revokeAllUserTokens(userId);
     
     // Clear current session cookies
@@ -403,8 +412,8 @@ export const forgotPassword = async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
     const user = await User.findByEmail(email);
-    // Respond with success regardless to avoid user enumeration
-    if (!user) return res.json({ message: 'If that email exists, a reset link was sent' });
+    // Return explicit not-found so frontend can inform user appropriately
+    if (!user) return res.status(404).json({ error: 'User with this email does not exist' });
 
     let rawToken = null;
     try {
@@ -496,7 +505,7 @@ export const forgotPassword = async (req, res) => {
       // Intentionally do not fail the request to avoid leaking state
     }
 
-    res.json({ message: 'If that email exists, a reset link was sent' });
+    res.json({ message: `A reset link was sent to ${user.username}`, username: user.username });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -529,6 +538,49 @@ export const resetPassword = async (req, res) => {
     await RefreshToken.revokeAllUserTokens(record.user_id);
 
     res.json({ message: 'Password has been reset successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Change password: verify current password and update to new password
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.userId; // From auth middleware
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    // Get current user data
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const newPasswordHash = await bcrypt.hash(newPassword, salt);
+
+    // Update password in database
+    await pool.query(
+      `UPDATE users SET password_hash = $1 WHERE user_id = $2`,
+      [newPasswordHash, userId]
+    );
+
+    // Revoke all refresh tokens to force re-login
+    await RefreshToken.revokeAllUserTokens(userId);
+
+    res.json({ message: 'Password changed successfully. Please log in again.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

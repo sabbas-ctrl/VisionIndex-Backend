@@ -1,5 +1,6 @@
 import { SystemLog } from '../models/mongodb/SystemLog.js';
 import { Flag } from '../models/mongodb/Flag.js';
+import { ErrorLogger } from '../utils/errorLogger.js';
 import mongoose from 'mongoose';
 
 // System Log Controllers
@@ -19,44 +20,57 @@ export const getSystemLogs = async (req, res) => {
     } = req.query;
 
     const offset = (page - 1) * limit;
-    const filters = {};
-
-    if (level) filters.level = level;
-    if (module) filters.module = module;
-    if (host) filters.host = host;
-    if (userId) filters.user_id = parseInt(userId);
-    if (actionType) filters.action_type = actionType;
+    
+    // Build base query for both search and regular filtering
+    const baseQuery = {};
+    if (level) baseQuery.level = level;
+    if (module) baseQuery.module = module;
+    if (host) baseQuery.host = host;
+    if (userId) baseQuery.user_id = parseInt(userId);
+    if (actionType) baseQuery.action_type = actionType;
     if (startDate && endDate) {
-      filters.start_date = new Date(startDate);
-      filters.end_date = new Date(endDate);
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      baseQuery.timestamp = {
+        $gte: start,
+        $lte: end
+      };
     }
 
     let logs;
-    if (search) {
-      logs = await SystemLog.searchLogs(search, filters, parseInt(limit));
-    } else {
-      // Build query based on filters
-      const query = {};
-      if (level) query.level = level;
-      if (module) query.module = module;
-      if (host) query.host = host;
-      if (userId) query.user_id = parseInt(userId);
-      if (actionType) query.action_type = actionType;
-      if (startDate && endDate) {
-        query.timestamp = {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate)
-        };
-      }
+    let totalCount;
 
-      logs = await SystemLog.find(query)
+    if (search) {
+      // Use case-insensitive regex search across common fields for broader matching
+      const regex = new RegExp(search, 'i');
+      const searchQuery = {
+        ...baseQuery,
+        $or: [
+          { message: regex },
+          { module: regex },
+          { action_type: regex },
+          { host: regex }
+        ]
+      };
+
+      logs = await SystemLog.find(searchQuery)
         .sort({ timestamp: -1 })
         .limit(parseInt(limit))
         .skip(offset);
+
+      totalCount = await SystemLog.countDocuments(searchQuery);
+    } else {
+      // Regular filtering without text search
+      logs = await SystemLog.find(baseQuery)
+        .sort({ timestamp: -1 })
+        .limit(parseInt(limit))
+        .skip(offset);
+        
+      totalCount = await SystemLog.countDocuments(baseQuery);
     }
 
-    // Get total count for pagination
-    const totalCount = await SystemLog.countDocuments();
     const totalPages = Math.ceil(totalCount / limit);
 
     res.json({
@@ -71,6 +85,10 @@ export const getSystemLogs = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching system logs:', error);
+    await ErrorLogger.logControllerError(error, req, {
+      module: 'system_log_controller',
+      actionType: 'get_system_logs'
+    });
     res.status(500).json({ error: 'Failed to fetch system logs' });
   }
 };
@@ -79,6 +97,56 @@ export const getSystemLogStats = async (req, res) => {
   try {
     const stats = await SystemLog.getSystemStats();
     const recentErrors = await SystemLog.getRecentErrors(24, 10);
+    
+    // Get active users (users who have logged activity in the last 24 hours)
+    const activeUsersResult = await SystemLog.aggregate([
+      {
+        $match: {
+          user_id: { $exists: true, $ne: null },
+          timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+        }
+      },
+      {
+        $group: {
+          _id: '$user_id'
+        }
+      },
+      {
+        $count: 'activeUsers'
+      }
+    ]);
+    
+    const activeUsers = activeUsersResult[0]?.activeUsers || 0;
+    
+    // Calculate system health based on error rate
+    const healthStats = await SystemLog.aggregate([
+      {
+        $match: {
+          timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalLogs: { $sum: 1 },
+          errorLogs: {
+            $sum: {
+              $cond: [
+                { $in: ['$level', ['error', 'critical']] },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]);
+    
+    let systemHealth = 100; // Default to 100% healthy
+    if (healthStats[0] && healthStats[0].totalLogs > 0) {
+      const errorRate = (healthStats[0].errorLogs / healthStats[0].totalLogs) * 100;
+      systemHealth = Math.max(0, 100 - errorRate); // Health decreases with error rate
+    }
     
     // Get logs by level for the last 7 days
     const logsByLevel = await SystemLog.aggregate([
@@ -121,12 +189,18 @@ export const getSystemLogStats = async (req, res) => {
 
     res.json({
       ...stats[0],
+      activeUsers,
+      systemHealth: Math.round(systemHealth),
       recentErrors,
       logsByLevel,
       logsByModule
     });
   } catch (error) {
     console.error('Error fetching system log stats:', error);
+    await ErrorLogger.logControllerError(error, req, {
+      module: 'system_log_controller',
+      actionType: 'get_system_log_stats'
+    });
     res.status(500).json({ error: 'Failed to fetch system log stats' });
   }
 };
@@ -251,44 +325,56 @@ export const getFlags = async (req, res) => {
     } = req.query;
 
     const offset = (page - 1) * limit;
-    const filters = {};
 
-    if (flagType) filters.flag_type = flagType;
-    if (status) filters.status = status;
-    if (priority) filters.priority = priority;
-    if (userId) filters.user_id = parseInt(userId);
-    if (assignedTo) filters.assigned_to = parseInt(assignedTo);
+    // Build base query for filters
+    const baseQuery = {};
+    if (flagType) baseQuery.flag_type = flagType;
+    if (status) baseQuery.status = status;
+    if (priority) baseQuery.priority = priority;
+    if (userId) baseQuery.user_id = parseInt(userId);
+    if (assignedTo) baseQuery.assigned_to = parseInt(assignedTo);
     if (startDate && endDate) {
-      filters.start_date = new Date(startDate);
-      filters.end_date = new Date(endDate);
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      baseQuery.created_at = {
+        $gte: start,
+        $lte: end
+      };
     }
 
     let flags;
-    if (search) {
-      flags = await Flag.searchFlags(search, filters, parseInt(limit));
-    } else {
-      // Build query based on filters
-      const query = {};
-      if (flagType) query.flag_type = flagType;
-      if (status) query.status = status;
-      if (priority) query.priority = priority;
-      if (userId) query.user_id = parseInt(userId);
-      if (assignedTo) query.assigned_to = parseInt(assignedTo);
-      if (startDate && endDate) {
-        query.created_at = {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate)
-        };
-      }
+    let totalCount;
 
-      flags = await Flag.find(query)
+    if (search) {
+      // Case-insensitive regex across message, flag_type, status, priority
+      const regex = new RegExp(search, 'i');
+      const searchQuery = {
+        ...baseQuery,
+        $or: [
+          { message: regex },
+          { flag_type: regex },
+          { status: regex },
+          { priority: regex }
+        ]
+      };
+
+      flags = await Flag.find(searchQuery)
         .sort({ created_at: -1 })
         .limit(parseInt(limit))
         .skip(offset);
+
+      totalCount = await Flag.countDocuments(searchQuery);
+    } else {
+      flags = await Flag.find(baseQuery)
+        .sort({ created_at: -1 })
+        .limit(parseInt(limit))
+        .skip(offset);
+
+      totalCount = await Flag.countDocuments(baseQuery);
     }
 
-    // Get total count for pagination
-    const totalCount = await Flag.countDocuments();
     const totalPages = Math.ceil(totalCount / limit);
 
     res.json({
@@ -440,7 +526,7 @@ export const resolveFlag = async (req, res) => {
   try {
     const { flagId } = req.params;
     const { notes } = req.body;
-    const resolvedBy = req.user.userId;
+    const resolvedBy = req.user.userId || req.user.user_id;
 
     const flag = await Flag.findById(flagId);
     if (!flag) {
@@ -553,9 +639,15 @@ export const exportFlags = async (req, res) => {
     if (status) query.status = status;
     if (priority) query.priority = priority;
     if (startDate && endDate) {
+      // Add time range to include the entire day
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      
       query.created_at = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
+        $gte: start,
+        $lte: end
       };
     }
 

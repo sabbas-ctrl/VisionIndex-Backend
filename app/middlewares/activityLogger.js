@@ -9,7 +9,7 @@ export const activityLogger = (actionType, options = {}) => {
     const startTime = Date.now();
 
     // Extract user and session information
-    const userId = req.user?.userId;
+    const userId = req.user?.userId || req.user?.user_id;
     // Use refresh token as session identifier only if it's a valid UUID; otherwise set null
     const refreshTokenCookie = req.cookies?.refreshToken;
     const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -175,7 +175,7 @@ export const systemLogger = (level, module, message, options = {}) => {
 
     res.send = function(data) {
       const status = res.statusCode >= 200 && res.statusCode < 300 ? 'success' : 'failure';
-      const userId = req.user?.userId;
+      const userId = req.user?.userId || req.user?.user_id;
       const sessionId = req.cookies?.refreshToken;
       const ipAddress = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
 
@@ -216,7 +216,7 @@ export const systemLogger = (level, module, message, options = {}) => {
 // Middleware to detect and flag suspicious activities
 export const anomalyDetector = (options = {}) => {
   return async (req, res, next) => {
-    const userId = req.user?.userId;
+    const userId = req.user?.userId || req.user?.user_id;
     const ipAddress = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
 
@@ -319,6 +319,15 @@ async function checkAccessPatterns(userId, url, method) {
     const isSensitive = sensitiveEndpoints.some(endpoint => url.includes(endpoint));
 
     if (isSensitive) {
+      // Do not flag normal first-time page views (read-only)
+      const writeMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+      const isWriteOperation = writeMethods.includes(method);
+
+      // If it's a GET to a sensitive endpoint (typical first-time page load), skip flagging
+      if (!isWriteOperation) {
+        return null;
+      }
+
       // Check if user has accessed this endpoint before
       const previousAccess = await UserActivityLog.findByUserId(userId, 1000, 0);
       const hasAccessedBefore = previousAccess.some(log => 
@@ -453,7 +462,7 @@ async function createFlag(anomalyData, userId, ipAddress, userAgent, req) {
 // Middleware to log authentication events
 export const authLogger = () => {
   return activityLogger('auth', {
-    targetId: (req) => req.body?.email || req.user?.userId,
+    targetId: (req) => req.body?.email || req.user?.userId || req.user?.user_id,
     details: (req, res, data) => ({
       authType: req.route?.path?.includes('login') ? 'login' : 
                 req.route?.path?.includes('logout') ? 'logout' : 'auth',

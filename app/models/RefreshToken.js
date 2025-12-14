@@ -38,21 +38,21 @@ export class RefreshToken {
 
   static async revokeToken(tokenId) {
     await pool.query(
-      'UPDATE refresh_tokens SET is_revoked = TRUE WHERE token_id = $1',
+      'DELETE FROM refresh_tokens WHERE token_id = $1',
       [tokenId]
     );
   }
 
   static async revokeAllUserTokens(userId) {
     await pool.query(
-      'UPDATE refresh_tokens SET is_revoked = TRUE WHERE user_id = $1',
+      'DELETE FROM refresh_tokens WHERE user_id = $1',
       [userId]
     );
   }
 
   static async revokeTokenByToken(refreshToken) {
     await pool.query(
-      'UPDATE refresh_tokens SET is_revoked = TRUE WHERE refresh_token = $1',
+      'DELETE FROM refresh_tokens WHERE refresh_token = $1',
       [refreshToken]
     );
   }

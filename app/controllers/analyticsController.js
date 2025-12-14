@@ -278,6 +278,23 @@ export class AnalyticsController {
       // Get comprehensive analytics data
       const analyticsData = await getComprehensiveAnalytics(timeRange, userId);
 
+      // Log the export action for audit trail
+      const { UserActivityLog } = await import('../models/UserActivityLog.js');
+      await UserActivityLog.create({
+        userId: userId,
+        actionType: 'analytics_export',
+        targetId: null,
+        status: 'success',
+        details: {
+          format: format,
+          timeRange: timeRange,
+          exportType: 'dashboard_analytics',
+          dataSize: JSON.stringify(analyticsData).length
+        },
+        ipAddress: req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || 'unknown',
+        userAgent: req.headers['user-agent'] || 'unknown'
+      });
+
       if (format === 'csv') {
         // Convert to CSV format
         const csv = convertToCSV(analyticsData);
@@ -294,6 +311,28 @@ export class AnalyticsController {
       }
     } catch (error) {
       console.error('Error exporting analytics:', error);
+      
+      // Log the failed export action for audit trail
+      try {
+        const { UserActivityLog } = await import('../models/UserActivityLog.js');
+        await UserActivityLog.create({
+          userId: req.user.user_id,
+          actionType: 'analytics_export',
+          targetId: null,
+          status: 'failed',
+          details: {
+            format: req.query.format || 'json',
+            timeRange: req.query.timeRange || '7d',
+            exportType: 'dashboard_analytics',
+            error: error.message
+          },
+          ipAddress: req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || 'unknown',
+          userAgent: req.headers['user-agent'] || 'unknown'
+        });
+      } catch (logError) {
+        console.error('Failed to log analytics export error:', logError);
+      }
+      
       res.status(500).json({
         success: false,
         message: 'Error exporting analytics data',
@@ -518,13 +557,120 @@ async function getWeeklyTimeChange(timeRange) {
 }
 
 async function getComprehensiveAnalytics(timeRange, userId) {
-  // This would return comprehensive analytics data for export
-  return {
-    dashboard_metrics: await AnalyticsController.getDashboardMetrics({ query: { timeRange } }, { json: () => {} }),
-    search_history: await AnalyticsController.getSearchHistory({ query: { timeRange, userId } }, { json: () => {} }),
-    detection_events: await DetectionEvent.getAnalytics(timeRange),
-    system_performance: await getSystemPerformanceMetrics()
-  };
+  try {
+    // Get dashboard metrics data directly
+    const [
+      detectionsByHour,
+      objectTypes,
+      totalDetectionsToday,
+      videosUploadedThisWeek,
+      uniquePersonsDetected,
+      searchesPerformedToday,
+      toolUsageCount,
+      dailyUsageTime,
+      weeklyUsageTime,
+      avgVideoLength
+    ] = await Promise.all([
+      DetectionEvent.getDetectionsByHour(timeRange),
+      DetectionEvent.getObjectTypes(timeRange),
+      getTotalDetectionsToday(),
+      getVideosUploadedThisWeek(),
+      getUniquePersonsDetected(timeRange),
+      getSearchesPerformedToday(),
+      getToolUsageCount(timeRange),
+      getDailyUsageTime(timeRange),
+      getWeeklyUsageTime(timeRange),
+      getAvgVideoLength()
+    ]);
+
+    // Get search history data directly
+    const searchQuery = `
+      SELECT 
+        s.search_id,
+        s.query_text,
+        s.query_type,
+        s.created_at,
+        u.username as user,
+        r.role_name as role
+      FROM searches s
+      LEFT JOIN users u ON s.user_id = u.user_id
+      LEFT JOIN roles r ON u.role_id = r.role_id
+      WHERE s.user_id = $1 AND s.created_at >= NOW() - INTERVAL '${timeRange === '1d' ? '1 day' : timeRange === '7d' ? '7 days' : '30 days'}'
+      ORDER BY s.created_at DESC
+      LIMIT 50
+    `;
+    const searchResult = await pool.query(searchQuery, [userId]);
+
+    // Get detection events
+    const detectionEvents = await DetectionEvent.getAnalytics(timeRange);
+
+    return {
+      timeRange,
+      dashboard_metrics: {
+        charts: {
+          detectionsByHour,
+          objectTypes
+        },
+        stats: [
+          {
+            title: "Total Detections Today",
+            value: totalDetectionsToday.toLocaleString(),
+            icon: "Eye"
+          },
+          {
+            title: "Videos Uploaded This Week", 
+            value: videosUploadedThisWeek.toString(),
+            icon: "Video"
+          },
+          {
+            title: "Unique Persons Detected",
+            value: uniquePersonsDetected.toLocaleString(),
+            icon: "Users"
+          },
+          {
+            title: "Searches Performed Today",
+            value: searchesPerformedToday.toString(),
+            icon: "Search"
+          },
+          {
+            title: "Tool Usage Count",
+            value: toolUsageCount.toLocaleString(),
+            icon: "FileText"
+          },
+          {
+            title: "Daily Usage Time",
+            value: `${dailyUsageTime.toFixed(1)}h`,
+            icon: "Clock"
+          },
+          {
+            title: "Weekly Usage Time",
+            value: `${weeklyUsageTime.toFixed(1)}h`,
+            icon: "Calendar"
+          },
+          {
+            title: "Avg Video Length",
+            value: `${avgVideoLength.toFixed(1)}m`,
+            icon: "Video"
+          }
+        ]
+      },
+      search_history: {
+        data: searchResult.rows.map(row => ({
+          id: row.search_id,
+          query: row.query_text,
+          query_type: row.query_type,
+          user: row.user,
+          role: row.role,
+          timestamp: row.created_at
+        }))
+      },
+      detection_events: detectionEvents || [],
+      system_performance: await getSystemPerformanceMetrics()
+    };
+  } catch (error) {
+    console.error('Error in getComprehensiveAnalytics:', error);
+    throw error;
+  }
 }
 
 async function getSystemPerformanceMetrics() {
@@ -542,10 +688,45 @@ async function getSystemPerformanceMetrics() {
 }
 
 function convertToCSV(data) {
-  // Simple CSV conversion - in production, use a proper CSV library
-  const headers = Object.keys(data);
-  const rows = [headers.join(',')];
+  const csvRows = [];
   
-  // Add data rows (simplified)
-  return rows.join('\n');
+  // Add metadata
+  csvRows.push('Metric,Value,Description');
+  csvRows.push(`Export Date,${new Date().toISOString()},Generated on`);
+  csvRows.push(`Time Range,${data.timeRange || 'N/A'},Data period`);
+  csvRows.push(''); // Empty row
+  
+  // Add dashboard metrics
+  if (data.dashboard_metrics && data.dashboard_metrics.stats) {
+    csvRows.push('DASHBOARD METRICS');
+    csvRows.push('Metric,Value,Icon');
+    
+    data.dashboard_metrics.stats.forEach(stat => {
+      csvRows.push(`"${stat.title}","${stat.value}","${stat.icon || 'N/A'}"`);
+    });
+    csvRows.push(''); // Empty row
+  }
+  
+  // Add detection events
+  if (data.detection_events && data.detection_events.length > 0) {
+    csvRows.push('DETECTION EVENTS');
+    csvRows.push('Type,Count,Percentage');
+    
+    data.detection_events.forEach(event => {
+      csvRows.push(`"${event.detection_type || event.name || 'N/A'}","${event.count || event.value || 'N/A'}","${event.percentage || 'N/A'}"`);
+    });
+    csvRows.push(''); // Empty row
+  }
+  
+  // Add search history
+  if (data.search_history && data.search_history.data && data.search_history.data.length > 0) {
+    csvRows.push('SEARCH HISTORY');
+    csvRows.push('Query,Type,User,Role,Timestamp');
+    
+    data.search_history.data.forEach(search => {
+      csvRows.push(`"${search.query || 'N/A'}","${search.query_type || 'N/A'}","${search.user || 'N/A'}","${search.role || 'N/A'}","${search.timestamp || 'N/A'}"`);
+    });
+  }
+  
+  return csvRows.join('\n');
 }
