@@ -7,6 +7,7 @@ import { startAnalyticsJobs } from './jobs/analyticsJob.js';
 import { connectDB } from './config/postgresql.js';
 import { connectMongoDB } from './config/mongodb.js'; 
 import routes from './routes/index.js';
+import { initializeTemporalClient } from './utils/temporalClient.js';
 
 dotenv.config();
 
@@ -32,14 +33,25 @@ app.get('/health', (req, res) => {
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
+app.listen(port, async () => {
   console.log(`Server is running on port ${port}`);
+  
+  // Initialize database connections
+  await connectDB();
+  await connectMongoDB();
+  
+  // Initialize Temporal client (optional - will log warning if not available)
+  try {
+    await initializeTemporalClient();
+    console.log('✅ Temporal client initialized');
+  } catch (error) {
+    console.warn('⚠️  Temporal client not available:', error.message);
+    console.warn('   Video processing workflows will not work until Temporal server is started');
+    console.warn('   Run: docker run -p 7233:7233 temporalio/auto-setup:latest');
+  }
+  
+  // Start analytics jobs
+  startAnalyticsJobs();
 });
-
-connectDB();
-connectMongoDB();  // MongoDB ✅
-
-// Start analytics jobs
-startAnalyticsJobs();
 
 export default app;

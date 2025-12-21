@@ -51,6 +51,10 @@ router.get('/:videoId/segments', VideoController.getVideoSegments);
 router.get('/stats/overview', VideoController.getVideoStats);
 router.get('/search', VideoController.searchVideos);
 
+// Workflow management routes
+router.get('/:videoId/workflow-status', VideoController.getWorkflowStatus);
+router.post('/:videoId/reprocess', VideoController.reprocessVideo);
+
 export default router;
 
 

@@ -5,6 +5,7 @@ import { UserActivityLog } from '../models/UserActivityLog.js';
 import s3Config from '../config/s3.js';
 import crypto from 'crypto';
 import { activityLogger } from '../middlewares/activityLogger.js';
+import { startVideoProcessingWorkflow, getWorkflowStatus } from '../utils/temporalClient.js';
 
 // Helper function to format duration from seconds to HH:MM:SS format
 const formatDuration = (seconds) => {
@@ -228,11 +229,63 @@ export class VideoController {
       });
       console.log('User activity logged');
 
-      res.status(201).json({
-        success: true,
-        message: 'Video registered successfully',
-        video: video.toJSON()
-      });
+      // ========================================================================
+      // 🚀 START TEMPORAL WORKFLOW FOR VIDEO PROCESSING
+      // ========================================================================
+      console.log('Starting Temporal workflow for video processing...');
+      
+      try {
+        const workflowData = {
+          video_id: video.video_id,
+          file_name: fileName,
+          original_name: originalName,
+          uploader_id: userId,
+          storage_path: s3Config.getFileUrl(fileName),
+        };
+        
+        const workflowResult = await startVideoProcessingWorkflow(workflowData);
+        
+        console.log('Temporal workflow started:', workflowResult);
+        
+        // Update video status to processing
+        await Video.updateStatus(video.video_id, 'processing');
+        
+        // Update video metadata with workflow info
+        videoMetadata.processing_stage = 'downloading';
+        videoMetadata.workflow_id = workflowResult.workflowId;
+        videoMetadata.workflow_run_id = workflowResult.runId;
+        await videoMetadata.save();
+        
+        res.status(201).json({
+          success: true,
+          message: 'Video registered successfully and processing started',
+          video: video.toJSON(),
+          workflow: {
+            id: workflowResult.workflowId,
+            status: 'started',
+            message: 'Video processing workflow has been initiated'
+          }
+        });
+        
+      } catch (workflowError) {
+        // If workflow fails to start, still return success for video registration
+        // but log the error
+        console.error('Failed to start Temporal workflow:', workflowError);
+        
+        // Update status to failed
+        await Video.updateStatus(video.video_id, 'pending');
+        
+        res.status(201).json({
+          success: true,
+          message: 'Video registered successfully, but processing workflow failed to start',
+          video: video.toJSON(),
+          workflow: {
+            status: 'failed',
+            error: workflowError.message,
+            message: 'Video uploaded but automatic processing could not be started. Please try reprocessing manually.'
+          }
+        });
+      }
 
     } catch (error) {
       console.error('Error registering video:', error);
@@ -622,5 +675,146 @@ export class VideoController {
       });
     }
   }
-}
 
+  // Get workflow status for a video
+  static async getWorkflowStatus(req, res) {
+    try {
+      const { videoId } = req.params;
+      const userId = req.user.user_id;
+      const isAdmin = req.user.role_id === 1;
+
+      // Get video
+      const video = await Video.findById(videoId);
+      
+      if (!video) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video not found'
+        });
+      }
+
+      // Check permissions
+      if (video.uploader_id !== userId && !isAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      // Get workflow ID from MongoDB metadata
+      const metadata = await VideoMetadata.findOne({ video_id: videoId });
+      
+      if (!metadata || !metadata.workflow_id) {
+        return res.json({
+          success: true,
+          workflow: {
+            status: 'not_started',
+            message: 'No workflow has been started for this video'
+          }
+        });
+      }
+
+      try {
+        // Get workflow status from Temporal
+        const workflowStatus = await getWorkflowStatus(metadata.workflow_id);
+        
+        res.json({
+          success: true,
+          workflow: {
+            id: workflowStatus.workflowId,
+            status: workflowStatus.status,
+            startTime: workflowStatus.startTime,
+            closeTime: workflowStatus.closeTime,
+          }
+        });
+
+      } catch (workflowError) {
+        console.error('Error getting workflow status:', workflowError);
+        
+        res.json({
+          success: true,
+          workflow: {
+            id: metadata.workflow_id,
+            status: 'unknown',
+            error: workflowError.message
+          }
+        });
+      }
+
+    } catch (error) {
+      console.error('Error getting workflow status:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
+
+  // Reprocess a video
+  static async reprocessVideo(req, res) {
+    try {
+      const { videoId } = req.params;
+      const userId = req.user.user_id;
+      const isAdmin = req.user.role_id === 1;
+
+      // Get video
+      const video = await Video.findById(videoId);
+      
+      if (!video) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video not found'
+        });
+      }
+
+      // Check permissions
+      if (video.uploader_id !== userId && !isAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      // Start reprocessing workflow
+      const workflowData = {
+        video_id: video.video_id,
+        file_name: video.file_name,
+        original_name: video.original_name,
+        uploader_id: video.uploader_id,
+        storage_path: video.storage_path,
+      };
+      
+      const workflowResult = await startVideoProcessingWorkflow(workflowData);
+      
+      // Update video status
+      await Video.updateStatus(video.video_id, 'processing');
+      
+      // Update metadata
+      const metadata = await VideoMetadata.findOne({ video_id: videoId });
+      if (metadata) {
+        metadata.processing_stage = 'downloading';
+        metadata.workflow_id = workflowResult.workflowId;
+        metadata.workflow_run_id = workflowResult.runId;
+        await metadata.save();
+      }
+
+      res.json({
+        success: true,
+        message: 'Video reprocessing started',
+        workflow: {
+          id: workflowResult.workflowId,
+          status: 'started'
+        }
+      });
+
+    } catch (error) {
+      console.error('Error reprocessing video:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to start reprocessing',
+        error: error.message
+      });
+    }
+  }
+}
