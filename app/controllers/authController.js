@@ -280,6 +280,51 @@ export const verifyAuth = async (req, res) => {
   }
 };
 
+export const getSession = async (req, res) => {
+  try {
+    // authMiddleware has already decoded the access token
+    // Access token is stored in req.user.iat (issued at) and exp (expiry)
+    const accessToken = req.cookies.accessToken;
+    if (!accessToken) {
+      return res.status(401).json({ error: 'Access token not found' });
+    }
+
+    // Decode without verification to get exp claim
+    const decoded = jwt.decode(accessToken);
+    if (!decoded) {
+      return res.status(401).json({ error: 'Invalid token format' });
+    }
+
+    const userId = req.user.userId || req.user.user_id;
+    const refreshTokenValue = req.cookies.refreshToken;
+
+    // Get refresh token expiry from DB
+    const refreshTokenRecord = await RefreshToken.findByToken(refreshTokenValue);
+    if (!refreshTokenRecord) {
+      return res.status(401).json({ error: 'Refresh token not found' });
+    }
+
+    // Get user basic info
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      user: {
+        user_id: user.user_id,
+        username: user.username,
+        email: user.email
+      },
+      accessTokenExp: decoded.exp, // Unix timestamp (seconds)
+      refreshTokenExp: Math.floor(refreshTokenRecord.expires_at.getTime() / 1000), // Convert to Unix timestamp
+      issuedAt: Math.floor(decoded.iat)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 export const getUserProfile = async (req, res) => {
   try {
     const userId = req.user.userId || req.user.user_id;
