@@ -1,0 +1,6 @@
+@echo off
+set TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE3LCJwZXJtaXNzaW9ucyI6WyJ1c2VyLnJlYWQiLCJ1c2VyLmNyZWF0ZSIsInVzZXIudXBkYXRlIiwidXNlci5kZWxldGUiLCJ1c2VyLm1hbmFnZSIsInJvbGUucmVhZCIsInJvbGUuZGVsZXRlIiwicm9sZS5hc3NpZ24iLCJ2aWRlby5yZWFkIiwidmlkZW8ucHJvY2VzcyIsInJlcG9ydC5leHBvcnQiLCJzeXN0ZW0ubG9ncyIsInN5c3RlbS5tb25pdG9yIiwiYXVkaXQucmVhZCIsImF1ZGl0LmV4cG9ydCJdLCJpYXQiOjE3NTk0MTk3NzEsImV4cCI6MTc1OTQyMDY3MX0.3cFBPrP-QWSrQGur3Ef3MH-zYb020hvBbsxwOjSa9_I
+for /L %%i in (1,1,35) do (
+    curl -H "Authorization: Bearer %TOKEN%" http://localhost:3000/users
+    echo Request %%i completed
+)

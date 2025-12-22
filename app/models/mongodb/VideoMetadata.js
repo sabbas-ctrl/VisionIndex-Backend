@@ -8,7 +8,7 @@ const videoMetadataSchema = new mongoose.Schema({
   },
   processing_stage: {
     type: String,
-    enum: ['preprocessing', 'analysis', 'postprocessing', 'completed', 'failed'],
+    enum: ['downloading', 'preprocessing', 'analysis', 'postprocessing', 'completed', 'failed'],
     default: 'preprocessing'
   },
   frames_analyzed: {

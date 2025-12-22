@@ -5,6 +5,7 @@ import {
   logout, 
   verifyAuth, 
   refreshToken,
+  getSession,
   getUserSessions,
   revokeSession,
   revokeAllSessions,
@@ -42,6 +43,10 @@ router.post('/logout',
 router.get('/verify', 
   authMiddleware, 
   verifyAuth
+);
+router.get('/session',
+  authMiddleware,
+  getSession
 );
 router.get('/profile', 
   authMiddleware, 
