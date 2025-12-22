@@ -6,6 +6,14 @@ const videoMetadataSchema = new mongoose.Schema({
     required: true,
     ref: 'Video' // Reference to PostgreSQL video_id
   },
+  workflow_id: {
+    type: String,
+    default: null
+  },
+  workflow_run_id: {
+    type: String,
+    default: null
+  },
   processing_stage: {
     type: String,
     enum: ['downloading', 'preprocessing', 'analysis', 'postprocessing', 'completed', 'failed'],
@@ -151,6 +159,7 @@ const videoMetadataSchema = new mongoose.Schema({
 
 // Indexes for better performance
 videoMetadataSchema.index({ video_id: 1 });
+videoMetadataSchema.index({ workflow_id: 1 });
 videoMetadataSchema.index({ processing_stage: 1 });
 videoMetadataSchema.index({ 'detected_objects.timestamp': 1 });
 videoMetadataSchema.index({ 'face_detections.timestamp': 1 });

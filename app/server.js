@@ -7,6 +7,7 @@ import { startAnalyticsJobs } from './jobs/analyticsJob.js';
 import { connectDB } from './config/postgresql.js';
 import { connectMongoDB } from './config/mongodb.js'; 
 import routes from './routes/index.js';
+import internalRoutes from './routes/internalRoutes.js';
 import { initializeTemporalClient } from './utils/temporalClient.js';
 
 dotenv.config();
@@ -22,6 +23,8 @@ app.use(helmet());
 app.use(cookieParser());
 
 // Routes
+// Internal worker callbacks (no auth, token-protected)
+app.use('/internal', internalRoutes);
 app.use('/', routes); // Update this line
 
 app.get('/', (req, res) => {
