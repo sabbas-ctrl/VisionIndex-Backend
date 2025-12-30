@@ -25,7 +25,7 @@ app.use(cookieParser());
 // Routes
 // Internal worker callbacks (no auth, token-protected)
 app.use('/internal', internalRoutes);
-app.use('/', routes); // Update this line
+app.use('/', routes);
 
 app.get('/', (req, res) => {
   res.send('VisionIndex Backend');

@@ -2,10 +2,13 @@ import { Video } from '../models/Video.js';
 import { VideoSegment } from '../models/VideoSegment.js';
 import VideoMetadata from '../models/mongodb/VideoMetadata.js';
 import { UserActivityLog } from '../models/UserActivityLog.js';
+import { Image } from '../models/Image.js';
 import s3Config from '../config/s3.js';
 import crypto from 'crypto';
 import { activityLogger } from '../middlewares/activityLogger.js';
 import { startVideoProcessingWorkflow, getWorkflowStatus } from '../utils/temporalClient.js';
+import { SearchMedia } from '../models/SearchMedia.js';
+import { pool } from '../config/postgresql.js';
 
 // Helper function to format duration from seconds to HH:MM:SS format
 const formatDuration = (seconds) => {
@@ -14,6 +17,35 @@ const formatDuration = (seconds) => {
   const secs = Math.floor(seconds % 60);
   
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
+// Helper function to fetch associated reference image for a video
+const getAssociatedReferenceImage = async (video_id) => {
+  try {
+    const query = `
+      SELECT i.image_id, i.file_name, i.original_name
+      FROM public.searches s
+      JOIN public.images i ON s.query_image_id = i.image_id
+      WHERE s.query_video_id = $1 AND s.query_type = 'image'
+      ORDER BY s.created_at DESC
+      LIMIT 1
+    `;
+    const result = await pool.query(query, [video_id]);
+    
+    if (result.rows.length > 0) {
+      const image = result.rows[0];
+      return {
+        image_id: image.image_id,
+        file_name: image.file_name,
+        original_name: image.original_name,
+        video_id: video_id
+      };
+    }
+    return null;
+  } catch (error) {
+    console.warn(`Warning: Failed to fetch associated image for video_id ${video_id}:`, error.message);
+    return null;
+  }
 };
 
 export class VideoController {
@@ -229,63 +261,18 @@ export class VideoController {
       });
       console.log('User activity logged');
 
-      // ========================================================================
-      // 🚀 START TEMPORAL WORKFLOW FOR VIDEO PROCESSING
-      // ========================================================================
-      console.log('Starting Temporal workflow for video processing...');
+      // Video is now registered; workflow will start when reference image is uploaded
+      // This ensures we have both video and image before processing begins
       
-      try {
-        const workflowData = {
-          video_id: video.video_id,
-          file_name: fileName,
-          original_name: originalName,
-          uploader_id: userId,
-          storage_path: s3Config.getFileUrl(fileName),
-        };
-        
-        const workflowResult = await startVideoProcessingWorkflow(workflowData);
-        
-        console.log('Temporal workflow started:', workflowResult);
-        
-        // Update video status to processing
-        await Video.updateStatus(video.video_id, 'processing');
-        
-        // Update video metadata with workflow info
-        videoMetadata.processing_stage = 'downloading';
-        videoMetadata.workflow_id = workflowResult.workflowId;
-        videoMetadata.workflow_run_id = workflowResult.runId;
-        await videoMetadata.save();
-        
-        res.status(201).json({
-          success: true,
-          message: 'Video registered successfully and processing started',
-          video: video.toJSON(),
-          workflow: {
-            id: workflowResult.workflowId,
-            status: 'started',
-            message: 'Video processing workflow has been initiated'
-          }
-        });
-        
-      } catch (workflowError) {
-        // If workflow fails to start, still return success for video registration
-        // but log the error
-        console.error('Failed to start Temporal workflow:', workflowError);
-        
-        // Update status to failed
-        await Video.updateStatus(video.video_id, 'pending');
-        
-        res.status(201).json({
-          success: true,
-          message: 'Video registered successfully, but processing workflow failed to start',
-          video: video.toJSON(),
-          workflow: {
-            status: 'failed',
-            error: workflowError.message,
-            message: 'Video uploaded but automatic processing could not be started. Please try reprocessing manually.'
-          }
-        });
-      }
+      res.status(201).json({
+        success: true,
+        message: 'Video registered successfully. Upload a reference image to start processing.',
+        video: video.toJSON(),
+        workflow: {
+          status: 'pending',
+          message: 'Waiting for reference image upload to start processing workflow'
+        }
+      });
 
     } catch (error) {
       console.error('Error registering video:', error);
@@ -813,6 +800,93 @@ export class VideoController {
       res.status(500).json({
         success: false,
         message: 'Failed to start reprocessing',
+        error: error.message
+      });
+    }
+  }
+
+  // Store text query search in database
+  static async storeTextQuery(req, res) {
+    try {
+      const { videoId, queryText } = req.body;
+      const userId = req.user.user_id;
+
+      if (!videoId || !queryText) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required fields: videoId, queryText'
+        });
+      }
+
+      // Verify video exists and user has access
+      const video = await Video.findById(videoId);
+      if (!video) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video not found'
+        });
+      }
+
+      // Check permissions
+      if (video.uploader_id !== userId && req.user.role_id !== 1) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      // Store text query in searches table
+      const search = await SearchMedia.createForText({
+        user_id: userId,
+        search_session_id: null,
+        query_text: queryText,
+        video_id: videoId
+      });
+
+      // ========================================================================
+      // 🚀 START TEMPORAL WORKFLOW FOR VIDEO PROCESSING (for text query)
+      // ========================================================================
+      let workflowResult = null;
+      try {
+        console.log(`Text query submitted for video_id: ${videoId}. Starting processing workflow...`);
+        
+        // Start workflow with text query data (no reference image needed for text query)
+        const workflowData = {
+          video_id: videoId,
+          file_name: video.file_name,
+          original_name: video.original_name,
+          uploader_id: video.uploader_id,
+          storage_path: video.storage_path,
+          text_query: queryText,
+          image_data: null  // No image for text query
+        };
+        
+        workflowResult = await startVideoProcessingWorkflow(workflowData);
+        console.log('✅ Temporal workflow started for text query:', workflowResult);
+        
+        // Update video status to processing
+        await Video.updateStatus(videoId, 'processing');
+      } catch (workflowError) {
+        console.error('⚠ Failed to start Temporal workflow:', workflowError.message);
+        // Don't fail the text query storage if workflow fails to start
+      }
+
+      res.status(201).json({
+        success: true,
+        message: 'Text query stored and processing started',
+        search: search,
+        workflow: workflowResult ? {
+          id: workflowResult.workflowId,
+          status: 'started',
+          message: 'Video processing workflow has been initiated'
+        } : null
+      });
+
+    } catch (error) {
+      console.error('Error storing text query:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to store text query',
         error: error.message
       });
     }

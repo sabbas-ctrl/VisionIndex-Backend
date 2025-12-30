@@ -55,6 +55,7 @@ router.get('/search', VideoController.searchVideos);
 router.get('/:videoId/workflow-status', VideoController.getWorkflowStatus);
 router.post('/:videoId/reprocess', VideoController.reprocessVideo);
 
+// Search/query routes
+router.post('/search/text-query', VideoController.storeTextQuery);
+
 export default router;
-
-
