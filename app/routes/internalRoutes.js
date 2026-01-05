@@ -48,7 +48,7 @@ router.post('/workflow-callback', verifyWorkerToken, async (req, res) => {
 
     // Optionally update Postgres video status when stage changes
     if (stage === 'completed') {
-      await Video.updateStatus(video_id, 'completed');
+      await Video.updateStatus(video_id, 'processed');
     } else if (stage === 'failed') {
       await Video.updateStatus(video_id, 'failed');
     } else if (stage === 'downloading' || stage === 'analysis' || stage === 'preprocessing' || stage === 'postprocessing') {
