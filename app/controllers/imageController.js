@@ -217,9 +217,9 @@ export class ImageController {
         });
       }
 
-      // Fetch associated reference image
+      // Fetch associated reference image AND the search record
       const imageQuery = `
-        SELECT i.image_id, i.file_name, i.original_name
+        SELECT i.image_id, i.file_name, i.original_name, s.search_id
         FROM public.searches s
         JOIN public.images i ON s.query_image_id = i.image_id
         WHERE s.query_video_id = $1 AND s.query_type = 'image'
@@ -236,6 +236,7 @@ export class ImageController {
       }
 
       const imageData = imageResult.rows[0];
+      const searchId = imageData.search_id;
 
       // Fetch text query if it exists for this video
       const textQuery = await ImageController.getTextQueryForVideo(videoId);
@@ -280,6 +281,12 @@ export class ImageController {
       res.status(200).json({
         success: true,
         message: 'Image-based analysis started',
+        search: {
+          search_id: searchId,
+          query_type: 'image',
+          query_video_id: videoId,
+          query_image_id: imageData.image_id
+        },
         workflow: {
           id: workflowResult.workflowId,
           status: 'started',

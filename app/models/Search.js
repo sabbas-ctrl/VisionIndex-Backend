@@ -9,6 +9,8 @@ export class Search {
     this.query_type = data.query_type;
     this.query_vector_id = data.query_vector_id;
     this.query_metadata = data.query_metadata;
+    this.query_video_id = data.query_video_id;
+    this.query_image_id = data.query_image_id;
     this.created_at = data.created_at;
   }
 
