@@ -395,7 +395,7 @@ export class SearchController {
 
   /**
    * Post-processing query - search already processed video data in Qdrant
-   * Supports text queries (using CLIP text encoding)
+   * Uses CLIP embeddings via Python text query service for semantic search
    */
   static async postProcessingQuery(req, res) {
     try {
@@ -418,15 +418,72 @@ export class SearchController {
         });
       }
 
+      // Call unified Python query service for CLIP-based semantic search
+      const queryServiceUrl = process.env.QUERY_SERVICE_URL || process.env.IMAGE_QUERY_SERVICE_URL || 'http://localhost:5001';
+      
+      try {
+        const axios = (await import('axios')).default;
+        const response = await axios.post(`${queryServiceUrl}/query/text`, {
+          text: queryText,
+          video_id: videoId,
+          top_k: topK
+        }, {
+          timeout: 30000 // 30 second timeout
+        });
+
+        if (response.data.success) {
+          return res.json({
+            success: true,
+            data: {
+              query: queryText,
+              queryType,
+              videoId: parseInt(videoId),
+              summary: response.data.summary,
+              results: response.data.results
+            }
+          });
+        } else {
+          throw new Error(response.data.error || 'Text query failed');
+        }
+      } catch (serviceError) {
+        console.error('Query service (text) error:', serviceError.message);
+        
+        // Check if it's a connection error to the Python service
+        if (serviceError.code === 'ECONNREFUSED') {
+          return res.status(503).json({
+            success: false,
+            message: 'Query service is not available. Please ensure the Python query service is running.',
+            error: 'Service unavailable'
+          });
+        }
+        
+        throw serviceError;
+      }
+
+    } catch (error) {
+      console.error('Error in post-processing query:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to execute post-processing query',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Legacy attribute-based query (kept for fallback/debugging)
+   * This is the old implementation without CLIP
+   */
+  static async postProcessingQueryLegacy(req, res) {
+    try {
+      const { videoId } = req.params;
+      const { queryText, queryType = 'text', topK = 10 } = req.body;
+
       // Import Qdrant client
       const { QdrantClient } = await import('@qdrant/js-client-rest');
       
       const qdrantUrl = process.env.QDRANT_URL || 'http://localhost:6333';
       const client = new QdrantClient({ url: qdrantUrl });
-
-      // For text queries, we need to call a Python service to get CLIP embeddings
-      // For now, we'll use a simple attribute-based search as a fallback
-      // In production, you'd call a CLIP embedding service
       
       const results = {
         persons: [],
@@ -445,85 +502,111 @@ export class SearchController {
       const detectedColors = colors.filter(c => queryLower.includes(c));
       
       // Object keywords
-      const objectKeywords = ['bag', 'backpack', 'laptop', 'phone', 'suitcase', 'handbag', 'helmet', 'bottle'];
+      const objectKeywords = [
+        'bag', 'backpack', 'laptop', 'phone', 'mobile', 'mobile phone', 'cell', 'cellphone', 'cell phone',
+        'suitcase', 'handbag', 'purse', 'helmet', 'bottle'
+      ];
       const detectedObjects = objectKeywords.filter(o => queryLower.includes(o));
       
       // Clothing keywords
       const hasUpperClothing = queryLower.includes('shirt') || queryLower.includes('jacket') || queryLower.includes('top') || queryLower.includes('hoodie');
       const hasLowerClothing = queryLower.includes('pants') || queryLower.includes('jeans') || queryLower.includes('shorts') || queryLower.includes('skirt');
 
-      // Search person_tracks
-      try {
-        // Build scroll filter
-        const mustConditions = [
-          { key: 'video_id', match: { value: parseInt(videoId) } }
-        ];
+      const personIndicators = ['person', 'people', 'man', 'woman', 'guy', 'girl', 'boy', 'child', 'individual'];
+      const hasPersonIndicator = personIndicators.some(term => queryLower.includes(term));
+      const objectOnlyQuery = detectedObjects.length > 0 && !hasUpperClothing && !hasLowerClothing && !hasPersonIndicator;
 
-        // Add color filter if detected
-        if (detectedColors.length > 0 && (hasUpperClothing || (!hasUpperClothing && !hasLowerClothing))) {
-          // Search upper_color
-          mustConditions.push({
-            key: 'upper_color',
-            match: { any: detectedColors }
-          });
-        }
-        
-        if (detectedColors.length > 0 && hasLowerClothing) {
-          // Search lower_color
-          mustConditions.push({
-            key: 'lower_color',
-            match: { any: detectedColors }
-          });
-        }
+      const normalizeObjectToken = (token) => {
+        if (!token) return '';
+        const t = token.toLowerCase();
+        if (t.includes('cell') || t.includes('mobile') || t.includes('phone')) return 'phone';
+        if (t.includes('handbag') || t.includes('purse')) return 'handbag';
+        return t;
+      };
 
-        const personResults = await client.scroll('person_tracks', {
-          filter: {
-            must: mustConditions
-          },
-          limit: topK,
-          with_payload: true,
-          with_vectors: false
-        });
+      const detectedObjectTokens = new Set(detectedObjects.map(normalizeObjectToken));
 
-        if (personResults.points) {
-          // Score results based on query match
-          personResults.points.forEach((point, index) => {
-            const payload = point.payload || {};
-            let score = 0.5; // Base score
-            
-            // Boost score based on matches
-            if (detectedColors.includes(payload.upper_color?.toLowerCase())) score += 0.2;
-            if (detectedColors.includes(payload.lower_color?.toLowerCase())) score += 0.2;
-            
-            // Check carried objects
-            const carried = Array.isArray(payload.object_carried) ? payload.object_carried : [payload.object_carried];
-            for (const obj of detectedObjects) {
-              if (carried.some(c => c?.toLowerCase()?.includes(obj))) {
-                score += 0.15;
-              }
-            }
+      const matchesObjectType = (objectType) => {
+        const type = normalizeObjectToken(objectType || '');
+        if (!type) return false;
+        if (detectedObjectTokens.has(type)) return true;
+        return [...detectedObjectTokens].some(token => type.includes(token) || token.includes(type));
+      };
 
-            results.persons.push({
-              id: point.id,
-              trackId: payload.track_id,
-              personId: `Person-${String(payload.track_id || index + 1).padStart(3, '0')}`,
-              score: Math.min(score, 1.0),
-              confidence: `${(Math.min(score, 1.0) * 100).toFixed(1)}%`,
-              timeOfAppearance: payload.start_time || 'N/A',
-              endTime: payload.end_time || 'N/A',
-              clothingColors: {
-                upper: payload.upper_color || 'Unknown',
-                lower: payload.lower_color || 'Unknown'
-              },
-              objectCarried: Array.isArray(payload.object_carried) 
-                ? payload.object_carried.join(', ') || 'None'
-                : payload.object_carried || 'None',
-              numFrames: payload.num_frames || 0
+      // Search person_tracks (skip for object-only queries)
+      if (!objectOnlyQuery) {
+        try {
+          // Build scroll filter
+          const mustConditions = [
+            { key: 'video_id', match: { value: parseInt(videoId) } }
+          ];
+
+          // Add color filter if detected
+          if (detectedColors.length > 0 && (hasUpperClothing || (!hasUpperClothing && !hasLowerClothing))) {
+            // Search upper_color
+            mustConditions.push({
+              key: 'upper_color',
+              match: { any: detectedColors }
             });
+          }
+          
+          if (detectedColors.length > 0 && hasLowerClothing) {
+            // Search lower_color
+            mustConditions.push({
+              key: 'lower_color',
+              match: { any: detectedColors }
+            });
+          }
+
+          const personResults = await client.scroll('person_tracks', {
+            filter: {
+              must: mustConditions
+            },
+            limit: topK,
+            with_payload: true,
+            with_vectors: false
           });
+
+          if (personResults.points) {
+            // Score results based on query match
+            personResults.points.forEach((point, index) => {
+              const payload = point.payload || {};
+              let score = 0.5; // Base score
+              
+              // Boost score based on matches
+              if (detectedColors.includes(payload.upper_color?.toLowerCase())) score += 0.2;
+              if (detectedColors.includes(payload.lower_color?.toLowerCase())) score += 0.2;
+              
+              // Check carried objects
+              const carried = Array.isArray(payload.object_carried) ? payload.object_carried : [payload.object_carried];
+              for (const obj of detectedObjects) {
+                if (carried.some(c => c?.toLowerCase()?.includes(obj))) {
+                  score += 0.15;
+                }
+              }
+
+              results.persons.push({
+                id: point.id,
+                trackId: payload.track_id,
+                personId: `Person-${String(payload.track_id || index + 1).padStart(3, '0')}`,
+                score: Math.min(score, 1.0),
+                confidence: `${(Math.min(score, 1.0) * 100).toFixed(1)}%`,
+                timeOfAppearance: payload.start_time || 'N/A',
+                endTime: payload.end_time || 'N/A',
+                clothingColors: {
+                  upper: payload.upper_color || 'Unknown',
+                  lower: payload.lower_color || 'Unknown'
+                },
+                objectCarried: Array.isArray(payload.object_carried) 
+                  ? payload.object_carried.join(', ') || 'None'
+                  : payload.object_carried || 'None',
+                numFrames: payload.num_frames || 0
+              });
+            });
+          }
+        } catch (e) {
+          console.error('Error searching person_tracks:', e);
         }
-      } catch (e) {
-        console.error('Error searching person_tracks:', e);
       }
 
       // Search object_tracks if object keywords detected
@@ -546,7 +629,7 @@ export class SearchController {
               const objType = payload.object_type?.toLowerCase() || '';
               
               // Only include if matches query
-              if (detectedObjects.some(o => objType.includes(o))) {
+              if (matchesObjectType(objType)) {
                 let score = 0.7; // Base score for matching object type
                 
                 if (detectedColors.includes(payload.object_color?.toLowerCase())) {
@@ -570,6 +653,50 @@ export class SearchController {
           }
         } catch (e) {
           console.error('Error searching object_tracks:', e);
+        }
+      }
+
+      // Fallback: if object-only query returned no objects, try unfiltered object scan for this video
+      if (objectOnlyQuery && results.objects.length === 0) {
+        try {
+          const fallbackResults = await client.scroll('object_tracks', {
+            filter: {
+              must: [
+                { key: 'video_id', match: { value: parseInt(videoId) } }
+              ]
+            },
+            limit: topK,
+            with_payload: true,
+            with_vectors: false
+          });
+
+          if (fallbackResults.points) {
+            fallbackResults.points.forEach((point, index) => {
+              const payload = point.payload || {};
+              const objType = payload.object_type?.toLowerCase() || '';
+              if (!matchesObjectType(objType)) return;
+
+              let score = 0.6;
+              if (detectedColors.includes(payload.object_color?.toLowerCase())) {
+                score += 0.2;
+              }
+
+              results.objects.push({
+                id: point.id,
+                trackId: payload.track_id,
+                objectId: `Object-${String(payload.track_id || index + 1).padStart(3, '0')}`,
+                objectName: payload.object_type || 'Unknown',
+                score: Math.min(score, 1.0),
+                confidence: `${(Math.min(score, 1.0) * 100).toFixed(1)}%`,
+                timeOfAppearance: payload.start_time || payload.first_appearance_time || 'N/A',
+                endTime: payload.end_time || payload.last_appearance_time || 'N/A',
+                color: payload.object_color || 'Unknown',
+                numFrames: payload.num_frames || 0
+              });
+            });
+          }
+        } catch (e) {
+          console.error('Error in object-only fallback search:', e);
         }
       }
 
@@ -629,8 +756,8 @@ export class SearchController {
 
       console.log('[postProcessingImageQuery] Image received:', req.file.originalname, req.file.size, 'bytes');
 
-      // Call Python image query service
-      const imageQueryServiceUrl = process.env.IMAGE_QUERY_SERVICE_URL || 'http://localhost:5001';
+      // Call unified Python query service
+      const queryServiceUrl = process.env.QUERY_SERVICE_URL || process.env.IMAGE_QUERY_SERVICE_URL || 'http://localhost:5001';
       
       // Create form data to send to Python service
       const FormData = (await import('form-data')).default;
@@ -644,7 +771,7 @@ export class SearchController {
 
       // Make request to Python service
       const axios = (await import('axios')).default;
-      const response = await axios.post(`${imageQueryServiceUrl}/query/image`, formData, {
+      const response = await axios.post(`${queryServiceUrl}/query/image`, formData, {
         headers: formData.getHeaders(),
         timeout: 30000 // 30 second timeout
       });
@@ -668,7 +795,7 @@ export class SearchController {
       if (error.code === 'ECONNREFUSED') {
         return res.status(503).json({
           success: false,
-          message: 'Image query service is not available. Please ensure the Python image query service is running.',
+          message: 'Query service is not available. Please ensure the Python query service is running.',
           error: 'Service unavailable'
         });
       }
