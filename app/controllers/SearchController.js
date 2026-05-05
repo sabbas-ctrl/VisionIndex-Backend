@@ -1,5 +1,6 @@
 import { SearchResult } from '../models/SearchResult.js';
 import { Search } from '../models/Search.js';
+import { Video } from '../models/Video.js';
 
 export class SearchController {
   /**
@@ -102,17 +103,52 @@ export class SearchController {
       // Fetch search results
       const results = await SearchResult.findBySearchId(searchId, 100);
       
-      // If no results yet, return processing status
+      // If no results yet, check video processing status to determine if truly still processing
       if (!results || results.length === 0) {
-        // Return a processing status instead of 404
+        // Fetch video to check its processing status
+        const video = await Video.findById(search.query_video_id);
+        const videoStatus = video?.status || 'processing';
+        
+        // If video is still processing, return processing status
+        if (videoStatus === 'processing') {
+          return res.json({
+            success: true,
+            processing: true,
+            message: 'Results are still being processed',
+            search: {
+              search_id: search.search_id,
+              query_text: search.query_text,
+              created_at: search.created_at
+            }
+          });
+        }
+        
+        // If video processing is complete (status: processed, completed, etc.) but no results found,
+        // return empty analysis data with processing: false to proceed to analysis page
         return res.json({
           success: true,
-          processing: true,
-          message: 'Results are still being processed',
-          search: {
-            search_id: search.search_id,
-            query_text: search.query_text,
-            created_at: search.created_at
+          processing: false,
+          data: {
+            videoId: search.query_video_id,
+            personResult: false,
+            noMatchesFound: true,
+            message: 'Video processing complete. No matches found for the search query.',
+            detectionInfo: {
+              timeZone: { start: 'N/A', end: 'N/A' },
+              upperClothing: { color: 'N/A', type: 'N/A' },
+              lowerClothing: { color: 'N/A', type: 'N/A' },
+              objectCarried: 'None',
+              gender: { type: 'N/A', confidence: 'N/A' },
+              embeddingConfidence: 'N/A'
+            },
+            timeline: { markers: [] },
+            appearances: { first: 'N/A', last: 'N/A', total: 0, numFrames: 0, confidence: 'N/A' },
+            aiInsights: {
+              behavioral: 'No matching subjects were detected in the video.',
+              movement: 'N/A',
+              observations: 'Try uploading a different reference image or adjust your search parameters.'
+            },
+            additionalMatches: []
           }
         });
       }
