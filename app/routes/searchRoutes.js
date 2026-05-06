@@ -24,6 +24,9 @@ const upload = multer({
 // Get search results by search_id
 router.get('/results/:searchId', authMiddleware, SearchController.getSearchResults);
 
+// Resolve the latest search_id for a given video_id
+router.get('/latest/:videoId', authMiddleware, SearchController.getLatestSearchByVideoId);
+
 // Get formatted analysis data for Analysis page
 router.get('/analysis/:searchId', authMiddleware, SearchController.getAnalysisData);
 

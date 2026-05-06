@@ -97,6 +97,22 @@ export class Search {
     }
   }
 
+  static async findByVideoId(videoId) {
+    const query = `
+      SELECT * FROM searches 
+      WHERE query_video_id = $1
+      ORDER BY created_at DESC 
+      LIMIT 1
+    `;
+    
+    try {
+      const result = await pool.query(query, [videoId]);
+      return result.rows[0] ? new Search(result.rows[0]) : null;
+    } catch (error) {
+      throw new Error(`Error finding search by video: ${error.message}`);
+    }
+  }
+
   static async getAnalytics(timeRange = '7d', groupBy = 'query_type') {
     let timeCondition = '';
     switch (timeRange) {

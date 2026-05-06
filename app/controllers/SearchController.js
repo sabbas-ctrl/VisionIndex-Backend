@@ -4,6 +4,49 @@ import { Video } from '../models/Video.js';
 
 export class SearchController {
   /**
+   * Get the latest search for a video_id so the UI can open analysis from a video card.
+   */
+  static async getLatestSearchByVideoId(req, res) {
+    try {
+      const { videoId } = req.params;
+
+      if (!videoId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing videoId parameter'
+        });
+      }
+
+      const search = await Search.findByVideoId(videoId);
+
+      if (!search) {
+        return res.status(404).json({
+          success: false,
+          message: 'Search not found for this video'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          search_id: search.search_id,
+          video_id: search.query_video_id,
+          query_text: search.query_text,
+          query_type: search.query_type,
+          created_at: search.created_at
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching latest search by video ID:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch latest search by video ID',
+        error: error.message
+      });
+    }
+  }
+
+  /**
    * Get search results by search_id for Analysis page
    */
   static async getSearchResults(req, res) {

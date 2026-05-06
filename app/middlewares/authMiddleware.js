@@ -3,7 +3,6 @@ import { RefreshToken } from '../models/RefreshToken.js';
 import { ErrorLogger } from '../utils/errorLogger.js';
 
 export const authMiddleware = (req, res, next) => {
-  console.log(`🔍 Auth midd-leware called for ${req.method} ${req.originalUrl}`);
   const token = req.cookies.accessToken;
   if (!token) {
     // Don't log missing token errors for /auth/verify endpoint as it's used for checking auth status
