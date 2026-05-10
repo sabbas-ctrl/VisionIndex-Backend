@@ -95,6 +95,23 @@ export class Video {
     }
   }
 
+  static async findByUploaderAndStatus(uploaderId, status, limit = 50, offset = 0) {
+    const query = `
+      SELECT * FROM public.videos 
+      WHERE uploader_id = $1 AND status = $2
+      ORDER BY upload_time DESC 
+      LIMIT $3 OFFSET $4
+    `;
+    
+    try {
+      const result = await pool.query(query, [uploaderId, status, limit, offset]);
+      return result.rows.map(row => new Video(row));
+    } catch (error) {
+      console.error('Error finding videos by uploader and status:', error);
+      throw error;
+    }
+  }
+
   static async findAll(limit = 50, offset = 0, status = null) {
     let query = 'SELECT * FROM public.videos';
     const values = [];

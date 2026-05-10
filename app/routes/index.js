@@ -8,6 +8,7 @@ import systemLogRoutes from './systemLogRoutes.js';
 import videoRoutes from './videoRoutes.js';
 import imageRoutes from './imageRoutes.js';
 import analyticsRoutes from './analyticsRoutes.js';
+import searchRoutes from './searchRoutes.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { activityLogger, anomalyDetector } from '../middlewares/activityLogger.js';
 
@@ -41,5 +42,6 @@ router.use('/system', systemLogRoutes);
 router.use('/videos', videoRoutes);
 router.use('/images', imageRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/search', searchRoutes);
 
 export default router;

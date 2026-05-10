@@ -69,4 +69,20 @@ export class SearchMedia {
       query_video_id: video_id
     });
   }
+
+  static async findByVideoId(video_id) {
+    const query = `
+      SELECT * FROM public.searches
+      WHERE query_video_id = $1
+      ORDER BY created_at DESC
+    `;
+    
+    try {
+      const result = await pool.query(query, [video_id]);
+      return result.rows;
+    } catch (error) {
+      console.error('Error finding searches by video_id:', error);
+      throw error;
+    }
+  }
 }

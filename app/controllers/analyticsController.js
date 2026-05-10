@@ -174,9 +174,11 @@ export class AnalyticsController {
       const query = `
         SELECT 
           s.search_id,
+          s.query_video_id,
           s.query_text,
           s.query_type,
           s.created_at,
+          COALESCE(v.original_name, 'Unknown video') as video_name,
           u.username as user,
           r.role_name as role,
           CASE 
@@ -211,6 +213,7 @@ export class AnalyticsController {
         FROM searches s
         LEFT JOIN users u ON s.user_id = u.user_id
         LEFT JOIN roles r ON u.role_id = r.role_id
+        LEFT JOIN videos v ON s.query_video_id = v.video_id
         WHERE s.user_id = $1 ${dateFilter} ${roleFilter} ${statusFilter}
         ORDER BY s.created_at DESC
         LIMIT $2 OFFSET $3
@@ -236,6 +239,8 @@ export class AnalyticsController {
         role: row.role,
         avatar: row.avatar,
         queryType: row.query_type,
+        videoName: row.video_name,
+        videoId: row.query_video_id,
         filtersUsed: row.filters_used,
         dateTime: new Date(row.created_at).toLocaleString('en-US', {
           month: 'short',

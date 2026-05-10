@@ -9,6 +9,8 @@ export class Search {
     this.query_type = data.query_type;
     this.query_vector_id = data.query_vector_id;
     this.query_metadata = data.query_metadata;
+    this.query_video_id = data.query_video_id;
+    this.query_image_id = data.query_image_id;
     this.created_at = data.created_at;
   }
 
@@ -92,6 +94,22 @@ export class Search {
       }));
     } catch (error) {
       throw new Error(`Error finding searches by session: ${error.message}`);
+    }
+  }
+
+  static async findByVideoId(videoId) {
+    const query = `
+      SELECT * FROM searches 
+      WHERE query_video_id = $1
+      ORDER BY created_at DESC 
+      LIMIT 1
+    `;
+    
+    try {
+      const result = await pool.query(query, [videoId]);
+      return result.rows[0] ? new Search(result.rows[0]) : null;
+    } catch (error) {
+      throw new Error(`Error finding search by video: ${error.message}`);
     }
   }
 

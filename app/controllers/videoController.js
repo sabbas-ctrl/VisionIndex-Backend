@@ -3,6 +3,7 @@ import { VideoSegment } from '../models/VideoSegment.js';
 import VideoMetadata from '../models/mongodb/VideoMetadata.js';
 import { UserActivityLog } from '../models/UserActivityLog.js';
 import { Image } from '../models/Image.js';
+import { Search } from '../models/Search.js';
 import s3Config from '../config/s3.js';
 import crypto from 'crypto';
 import { activityLogger } from '../middlewares/activityLogger.js';
@@ -340,12 +341,31 @@ export class VideoController {
       const { page = 1, limit = 10, status } = req.query;
       const offset = (page - 1) * limit;
 
-      const videos = await Video.findByUploader(userId, parseInt(limit), offset);
+      let videos;
+      if (status) {
+        // Filter by status if provided
+        videos = await Video.findByUploaderAndStatus(userId, status, parseInt(limit), offset);
+      } else {
+        videos = await Video.findByUploader(userId, parseInt(limit), offset);
+      }
+
+      const videosWithSearch = await Promise.all(
+        videos.map(async (video) => {
+          const payload = video.toJSON();
+          const search = await Search.findByVideoId(video.video_id);
+          return {
+            ...payload,
+            search_id: search?.search_id || null
+          };
+        })
+      );
       const totalVideos = await Video.getStats(userId);
 
       res.json({
         success: true,
-        videos: videos.map(video => video.toJSON()),
+        data: {
+          videos: videosWithSearch,
+        },
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
