@@ -13,7 +13,7 @@ import path from 'path';
 // Point to the FRONTEND public folder
 const logoPath = path.resolve(
   process.cwd(),
-  '..',       
+  '..',
   '..',                // go up from VisionIndex-Backend
   'VisionIndex-Frontend',
   'public',
@@ -92,7 +92,7 @@ export const login = async (req, res) => {
     // Ensure is_verified column exists and enforce verification
     try {
       await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE`);
-    } catch (_) {}
+    } catch (_) { }
 
     if (user.is_verified === false || user.is_verified === 0) {
       return res.status(403).json({ error: 'Please verify your email before logging in' });
@@ -105,15 +105,15 @@ export const login = async (req, res) => {
 
     // Generate refresh token (random string, not JWT)
     const refreshTokenValue = crypto.randomBytes(64).toString('hex');
-    
+
     // Calculate expiration date (7 days from now)
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
-    
+
     // Get device info and IP address
     const deviceInfo = req.headers['user-agent'] || 'Unknown Device';
     const ipAddress = req.ip || req.connection.remoteAddress || 'Unknown IP';
-    
+
     // Store refresh token in separate table
     const refreshTokenRecord = await RefreshToken.create({
       userId: user.user_id,
@@ -137,7 +137,7 @@ export const login = async (req, res) => {
 
     // Create access token with userId and permissions for security
     const accessToken = jwt.sign(
-      { 
+      {
         userId: user.user_id,
         permissions: permissions
       },
@@ -149,18 +149,18 @@ export const login = async (req, res) => {
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 15 * 60 * 1000, // 15 minutes
     });
 
     res.cookie('refreshToken', refreshTokenValue, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    res.json({ 
+    res.json({
       message: 'Login successful',
       user: {
         user_id: user.user_id,
@@ -192,7 +192,7 @@ export const login = async (req, res) => {
 export const logout = async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken;
-    
+
     // Revoke the specific refresh token from database
     if (refreshToken) {
       await RefreshToken.revokeTokenByToken(refreshToken);
@@ -225,7 +225,7 @@ export const logout = async (req, res) => {
 export const refreshToken = async (req, res) => {
   try {
     const refreshTokenValue = req.cookies.refreshToken;
-    
+
     if (!refreshTokenValue) {
       return res.status(401).json({ error: 'Refresh token not provided' });
     }
@@ -241,7 +241,7 @@ export const refreshToken = async (req, res) => {
 
     // Generate new access token with permissions
     const newAccessToken = jwt.sign(
-      { 
+      {
         userId: tokenRecord.user_id,
         permissions: permissions
       },
@@ -270,8 +270,8 @@ export const refreshToken = async (req, res) => {
 export const verifyAuth = async (req, res) => {
   try {
     // If we reach here, the authMiddleware has already verified the token
-    res.json({ 
-      authenticated: true, 
+    res.json({
+      authenticated: true,
       userId: req.user.userId || req.user.user_id,
       permissions: req.user.permissions || []
     });
@@ -328,7 +328,7 @@ export const getSession = async (req, res) => {
 export const getUserProfile = async (req, res) => {
   try {
     const userId = req.user.userId || req.user.user_id;
-    
+
     // Get user information
     const user = await User.findById(userId);
     if (!user) {
@@ -373,7 +373,7 @@ export const getUserSessions = async (req, res) => {
   try {
     const userId = req.user.userId || req.user.user_id;
     const sessions = await RefreshToken.findByUserId(userId);
-    
+
     res.json({
       sessions: sessions.map(session => ({
         tokenId: session.token_id,
@@ -393,13 +393,13 @@ export const revokeSession = async (req, res) => {
   try {
     const { tokenId } = req.params;
     const userId = req.user.userId || req.user.user_id;
-    
+
     // Verify the token belongs to the current user
     const tokenInfo = await RefreshToken.getTokenInfo(tokenId);
     if (!tokenInfo || tokenInfo.user_id !== userId) {
       return res.status(404).json({ error: 'Session not found' });
     }
-    
+
     await RefreshToken.revokeToken(tokenId);
     res.json({ message: 'Session revoked successfully' });
   } catch (err) {
@@ -411,7 +411,7 @@ export const revokeAllSessions = async (req, res) => {
   try {
     const userId = req.user.userId || req.user.user_id;
     await RefreshToken.revokeAllUserTokens(userId);
-    
+
     // Clear current session cookies
     res.clearCookie('accessToken', {
       httpOnly: true,
@@ -424,7 +424,7 @@ export const revokeAllSessions = async (req, res) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict'
     });
-    
+
     res.json({ message: 'All sessions revoked successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -443,7 +443,7 @@ export const verifyEmail = async (req, res) => {
     // Ensure column exists, then mark as verified (do not change status here)
     try {
       await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE`);
-    } catch (_) {}
+    } catch (_) { }
     await pool.query(`UPDATE users SET is_verified = TRUE WHERE user_id = $1`, [record.user_id]);
     res.json({ message: 'Email verified successfully' });
   } catch (err) {
@@ -494,9 +494,8 @@ export const forgotPassword = async (req, res) => {
           If you didn’t request a new password, you can safely delete this email.
         </p>
   
-        ${
-          resetUrl
-            ? `<div style="margin: 30px 0;">
+        ${resetUrl
+        ? `<div style="margin: 30px 0;">
                 <a href="${resetUrl}" 
                   style="background: #6d5dfc; color: #ffffff; text-decoration: none;
                          padding: 12px 30px; border-radius: 6px; font-weight: 500; display: inline-block;">
@@ -507,8 +506,8 @@ export const forgotPassword = async (req, res) => {
                  If that doesn't work, copy and paste the following link in your browser:<br />
                  <a href="${resetUrl}" style="color: #6d5dfc; text-decoration: none;">${resetUrl}</a>
                </p>`
-            : ''
-        }
+        : ''
+      }
   
         <p style="font-size: 14px; color: #111827; margin-top: 40px; text-align: left;">
           The Spry Team.
@@ -516,7 +515,7 @@ export const forgotPassword = async (req, res) => {
       </div>
     </div>
   `;
-  
+
 
     // ✅ Plain-text fallback
     const text = resetUrl
@@ -540,7 +539,7 @@ export const forgotPassword = async (req, res) => {
             }
           ]
         });
-      }  else {
+      } else {
         console.warn('SMTP not configured. Skipping email send.');
         if (resetUrl) console.info('DEV RESET LINK:', resetUrl);
       }
@@ -593,7 +592,7 @@ export const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const userId = req.user.userId; // From auth middleware
-    
+
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'Current password and new password are required' });
     }
