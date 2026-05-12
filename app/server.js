@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { startAnalyticsJobs } from './jobs/analyticsJob.js';
 import { connectDB } from './config/postgresql.js';
-import { connectMongoDB } from './config/mongodb.js'; 
+import { connectMongoDB } from './config/mongodb.js';
 import routes from './routes/index.js';
 import internalRoutes from './routes/internalRoutes.js';
 import { initializeTemporalClient } from './utils/temporalClient.js';
@@ -13,6 +13,7 @@ import { initializeTemporalClient } from './utils/temporalClient.js';
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true // Allow cookies to be sent
@@ -38,11 +39,11 @@ app.get('/health', (req, res) => {
 const port = process.env.PORT || 3000;
 app.listen(port, async () => {
   console.log(`Server is running on port ${port}`);
-  
+
   // Initialize database connections
   await connectDB();
   await connectMongoDB();
-  
+
   // Initialize Temporal client (optional - will log warning if not available)
   try {
     await initializeTemporalClient();
@@ -52,7 +53,7 @@ app.listen(port, async () => {
     console.warn('   Video processing workflows will not work until Temporal server is started');
     console.warn('   Run: docker run -p 7233:7233 temporalio/auto-setup:latest');
   }
-  
+
   // Start analytics jobs
   startAnalyticsJobs();
 });
