@@ -221,9 +221,20 @@ export class SearchController {
       const endTime = primaryMetadata.end_time || primaryMetadata.last_appearance_time || startTime;
       const numFrames = primaryMetadata.num_frames || primaryMetadata.appearance_count || 1;
 
+      // Fetch video record for metadata (duration, resolution, format)
+      const video = await Video.findById(search.query_video_id);
+
       // Format for Analysis component
       const analysisData = {
         videoId: search.query_video_id, // Include videoId for post-processing queries
+        videoInfo: video ? {
+          duration: video.duration || null,
+          resolution: video.resolution || null,
+          originalName: video.original_name || null,
+          fileName: video.file_name || null,
+          format: video.original_name ? video.original_name.split('.').pop().toUpperCase() : 'MP4',
+          fileSize: video.file_size || null,
+        } : null,
         personResult: true,
         detectionInfo: {
           timeZone: {
