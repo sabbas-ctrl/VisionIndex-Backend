@@ -14,12 +14,13 @@ dotenv.config();
 
 const app = express();
 app.set('trust proxy', 1);
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true // Allow cookies to be sent
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
 app.use(helmet());
 app.use(cookieParser());
 
