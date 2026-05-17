@@ -164,7 +164,7 @@ export const emailTemplates = {
         Please verify your email address below to activate your account.
       </p>
       ${ctaButton(verifyUrl, 'Verify & Activate')}
-      ${fallbackLink(verifyUrl)}
+
       <p style="font-size:13px; color:${BRAND.textMuted}; margin:20px 0 0; line-height:1.5;">
         This link expires in <strong>24 hours</strong>. If this was unexpected, you can ignore this email or contact your administrator.
       </p>
