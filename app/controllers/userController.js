@@ -3,6 +3,7 @@ import { UserPermission } from '../models/UserPermission.js';
 import bcrypt from 'bcrypt';
 import EmailVerificationToken from '../models/EmailVerificationToken.js';
 import { sendMail } from '../config/mailer.js';
+import { emailTemplates } from '../utils/emailTemplates.js';
 
 
 // Get all users
@@ -52,7 +53,7 @@ export const createUser = async (req, res) => {
     // Ensure is_verified column exists for new users
     try {
       await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE`);
-    } catch (_) {}
+    } catch (_) { }
 
     const user = await User.create({
       username,
@@ -68,20 +69,14 @@ export const createUser = async (req, res) => {
 
       const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
       const verifyUrl = `${frontendBase}/verify-email?email=${encodeURIComponent(email)}&token=${encodeURIComponent(rawToken)}`;
-      const subject = 'Verify your VisionIndex account';
-      const html = `
-        <p>Hello ${username || ''},</p>
-        <p>Your account was created by an administrator. Please verify your email to activate your account.</p>
-        <p><a href="${verifyUrl}">Verify Email</a></p>
-        <p>This link expires in 24 hours.</p>
-      `;
-      const text = `Verify your email: ${verifyUrl}`;
 
-      const smtpConfigured = !!(process.env.SMTP_HOST);
-      if (smtpConfigured) {
+      const { subject, html, text } = emailTemplates.adminCreatedVerification({ username, verifyUrl });
+
+      const emailConfigured = !!(process.env.RESEND_API_KEY);
+      if (emailConfigured) {
         await sendMail({ to: email, subject, html, text });
       } else {
-        console.warn('SMTP not configured. Skipping verification email for created user.');
+        console.warn('RESEND_API_KEY not configured. Skipping verification email for created user.');
         console.info('DEV VERIFY LINK (created user):', verifyUrl);
       }
     } catch (mailErr) {
@@ -99,7 +94,7 @@ export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     const { username, email, roleId, isActive, password } = req.body;
-    
+
     // Validate password length if provided
     if (password && password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters long' });
@@ -107,7 +102,7 @@ export const updateUser = async (req, res) => {
 
     // Prepare update data
     const updateData = { username, email, roleId, isActive };
-    
+
     // Hash password if provided
     if (password) {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -126,16 +121,16 @@ export const updateUser = async (req, res) => {
 export const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Get user info before deletion for audit logging
     const userToDelete = await User.findById(id);
     if (!userToDelete) return res.status(404).json({ error: 'User not found' });
-    
+
     const deleted = await User.delete(id);
     if (!deleted) return res.status(404).json({ error: 'User not found' });
-    
+
     // Return user info for audit logging
-    res.json({ 
+    res.json({
       message: 'User deleted successfully',
       username: userToDelete.username,
       email: userToDelete.email,

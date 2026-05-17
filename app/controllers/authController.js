@@ -7,32 +7,7 @@ import { pool } from '../config/postgresql.js';
 import PasswordResetToken from '../models/PasswordResetToken.js';
 import { sendMail } from '../config/mailer.js';
 import EmailVerificationToken from '../models/EmailVerificationToken.js';
-import fs from 'fs';
-import path from 'path';
-
-// Point to the FRONTEND public folder
-const logoPath = path.resolve(
-  process.cwd(),
-  '..',
-  '..',                // go up from VisionIndex-Backend
-  'VisionIndex-Frontend',
-  'public',
-  'logo.png'
-);
-console.log("here it is:")
-console.log(logoPath);
-
-// Convert to base64 once
-let logoBase64 = '';
-if (fs.existsSync(logoPath)) {
-  const image = fs.readFileSync(logoPath);
-  logoBase64 = `data:image/png;base64,${image.toString('base64')}`;
-} else {
-  console.warn('⚠️ Logo not found at', logoPath);
-}
-
-console.log(logoBase64.slice(0, 100));
-
+import { emailTemplates } from '../utils/emailTemplates.js';
 
 export const register = async (req, res) => {
   try {
@@ -57,20 +32,14 @@ export const register = async (req, res) => {
 
       const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
       const verifyUrl = `${frontendBase}/verify-email?email=${encodeURIComponent(email)}&token=${encodeURIComponent(rawToken)}`;
-      const subject = 'Verify your VisionIndex account';
-      const html = `
-        <p>Hello ${username || ''},</p>
-        <p>Welcome to VisionIndex! Please verify your email to activate your account.</p>
-        <p><a href="${verifyUrl}">Verify Email</a></p>
-        <p>This link expires in 24 hours.</p>
-      `;
-      const text = `Verify your email: ${verifyUrl}`;
 
-      const smtpConfigured = !!(process.env.SMTP_HOST);
-      if (smtpConfigured) {
+      const { subject, html, text } = emailTemplates.verification({ username, verifyUrl });
+
+      const emailConfigured = !!(process.env.RESEND_API_KEY);
+      if (emailConfigured) {
         await sendMail({ to: email, subject, html, text });
       } else {
-        console.warn('SMTP not configured. Skipping verification email.');
+        console.warn('RESEND_API_KEY not configured. Skipping verification email.');
         console.info('DEV VERIFY LINK:', verifyUrl);
       }
     } catch (mailErr) {
@@ -474,73 +443,14 @@ export const forgotPassword = async (req, res) => {
       ? `${frontendBase}/reset-password?email=${encodeURIComponent(email)}&token=${encodeURIComponent(rawToken)}`
       : null;
 
-    const subject = 'Reset your VisionIndex password';
+    const { subject, html, text } = emailTemplates.passwordReset({ username: user.username, resetUrl });
 
-    // ✅ Styled HTML email
-    const html = `
-    <div style="font-family: Arial, sans-serif; background-color: #f9fafb; padding: 30px;">
-      <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 30px; text-align: center;">
-        
-        <h2 style="font-size: 22px; margin-bottom: 20px; font-weight: 600; color: #111827;">
-          Reset Your Password
-        </h2>
-        
-        <p style="font-size: 15px; color: #374151; margin-bottom: 20px; text-align: left;">
-          Hi ${user.username || 'User'},
-        </p>
-        
-        <p style="font-size: 15px; color: #374151; margin-bottom: 30px; text-align: left;">
-          Tap the button below to reset your customer account password.<br />
-          If you didn’t request a new password, you can safely delete this email.
-        </p>
-  
-        ${resetUrl
-        ? `<div style="margin: 30px 0;">
-                <a href="${resetUrl}" 
-                  style="background: #6d5dfc; color: #ffffff; text-decoration: none;
-                         padding: 12px 30px; border-radius: 6px; font-weight: 500; display: inline-block;">
-                  Reset Password
-                </a>
-               </div>
-               <p style="font-size: 13px; color: #6b7280; margin-top: 20px; text-align: left;">
-                 If that doesn't work, copy and paste the following link in your browser:<br />
-                 <a href="${resetUrl}" style="color: #6d5dfc; text-decoration: none;">${resetUrl}</a>
-               </p>`
-        : ''
-      }
-  
-        <p style="font-size: 14px; color: #111827; margin-top: 40px; text-align: left;">
-          The Spry Team.
-        </p>
-      </div>
-    </div>
-  `;
-
-
-    // ✅ Plain-text fallback
-    const text = resetUrl
-      ? `Hello ${user.username || 'User'},\n\nReset your password using this link (valid for 30 minutes): ${resetUrl}\n\nIf you did not request this, ignore this email.`
-      : 'A password reset was requested for this email.';
-
-    const smtpConfigured = !!process.env.SMTP_HOST;
+    const emailConfigured = !!process.env.RESEND_API_KEY;
     try {
-      if (smtpConfigured && resetUrl) {
-        await sendMail({
-          to: email,
-          subject,
-          html,
-          text,
-          attachments: [
-            {
-              filename: 'logo.png',
-              path: logoPath,   // absolute path to logo
-              cid: 'logoImage',  // must match img src="cid:logoImage"
-              contentDisposition: 'inline'
-            }
-          ]
-        });
+      if (emailConfigured && resetUrl) {
+        await sendMail({ to: email, subject, html, text });
       } else {
-        console.warn('SMTP not configured. Skipping email send.');
+        console.warn('RESEND_API_KEY not configured. Skipping email send.');
         if (resetUrl) console.info('DEV RESET LINK:', resetUrl);
       }
     } catch (mailErr) {
