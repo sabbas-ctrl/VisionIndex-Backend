@@ -39,6 +39,8 @@ router.get('/all', VideoController.getAllVideos);
 router.get('/:videoId', VideoController.getVideoDetails);
 router.put('/:videoId/labels', VideoController.updateVideoLabels);
 router.delete('/:videoId', VideoController.deleteVideo);
+router.get('/dashboard/queue', VideoController.getQueueVideos);
+router.post('/:videoId/dismiss', VideoController.dismissQueueVideo);
 
 // Download route
 router.get('/:videoId/download', VideoController.getDownloadUrl);
@@ -54,6 +56,7 @@ router.get('/search', VideoController.searchVideos);
 // Workflow management routes
 router.get('/:videoId/workflow-status', VideoController.getWorkflowStatus);
 router.post('/:videoId/reprocess', VideoController.reprocessVideo);
+router.post('/:videoId/cancel', VideoController.cancelVideoProcessing);
 
 // Search/query routes
 router.post('/search/text-query', VideoController.storeTextQuery);

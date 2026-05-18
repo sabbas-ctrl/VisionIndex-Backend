@@ -21,19 +21,19 @@ export class AnalyticsController {
         uniquePersonsDetected,
         searchesPerformedToday,
         toolUsageCount,
-        dailyUsageTime,
-        weeklyUsageTime,
+        videosProcessed,
+        avgProcessingTime,
         avgVideoLength
       ] = await Promise.all([
-        DetectionEvent.getDetectionsByHour(timeRange),
-        DetectionEvent.getObjectTypes(timeRange),
+        getActivityByHour(timeRange),
+        getVideoStatusDistribution(timeRange),
         getTotalDetectionsToday(),
         getVideosUploadedThisWeek(),
         getUniquePersonsDetected(timeRange),
         getSearchesPerformedToday(),
         getToolUsageCount(timeRange),
-        getDailyUsageTime(timeRange),
-        getWeeklyUsageTime(timeRange),
+        getVideosProcessed(timeRange),
+        getAvgProcessingTime(),
         getAvgVideoLength()
       ]);
 
@@ -44,16 +44,14 @@ export class AnalyticsController {
         personsChange,
         searchesChange,
         toolUsageChange,
-        dailyTimeChange,
-        weeklyTimeChange
+        processedChange,
       ] = await Promise.all([
         getDetectionsChange(timeRange),
         getVideosChange(timeRange),
         getPersonsChange(timeRange),
         getSearchesChange(timeRange),
         getToolUsageChange(timeRange),
-        getDailyTimeChange(timeRange),
-        getWeeklyTimeChange(timeRange)
+        getProcessedChange(timeRange),
       ]);
 
       const dashboardData = {
@@ -87,22 +85,22 @@ export class AnalyticsController {
             icon: "Search"
           },
           {
-            title: "Tool Usage Count",
+            title: "Total Searches",
             value: toolUsageCount.toLocaleString(),
             change: toolUsageChange,
             icon: "FileText"
           },
           {
-            title: "Daily Usage Time",
-            value: `${dailyUsageTime.toFixed(1)}h`,
-            change: dailyTimeChange,
-            icon: "Clock"
+            title: "Videos Processed",
+            value: videosProcessed.toString(),
+            change: processedChange,
+            icon: "CheckCircle"
           },
           {
-            title: "Weekly Usage Time",
-            value: `${weeklyUsageTime.toFixed(1)}h`,
-            change: weeklyTimeChange,
-            icon: "Calendar"
+            title: "Avg Processing Time",
+            value: avgProcessingTime,
+            change: "Per video",
+            icon: "Clock"
           },
           {
             title: "Avg Video Length",
@@ -126,6 +124,7 @@ export class AnalyticsController {
       });
     }
   }
+
 
   // Get search history with filters
   static async getSearchHistory(req, res) {
@@ -366,14 +365,17 @@ export class AnalyticsController {
   }
 }
 
-// Helper functions for dashboard metrics
+// Helper functions for dashboard metrics — queries REAL populated tables
 async function getTotalDetectionsToday() {
-  const result = await pool.query(`
-    SELECT COUNT(*) as count
-    FROM detection_events 
-    WHERE DATE(created_at) = CURRENT_DATE
-  `);
-  return parseInt(result.rows[0].count);
+  // Count search results created today (each result = 1 detection/match)
+  try {
+    const result = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM search_results
+      WHERE DATE(created_at) = CURRENT_DATE
+    `);
+    return parseInt(result.rows[0].count);
+  } catch { return 0; }
 }
 
 async function getVideosUploadedThisWeek() {
@@ -386,25 +388,16 @@ async function getVideosUploadedThisWeek() {
 }
 
 async function getUniquePersonsDetected(timeRange) {
-  let timeCondition = '';
-  switch (timeRange) {
-    case '1d':
-      timeCondition = "AND created_at >= NOW() - INTERVAL '1 day'";
-      break;
-    case '7d':
-      timeCondition = "AND created_at >= NOW() - INTERVAL '7 days'";
-      break;
-    case '30d':
-      timeCondition = "AND created_at >= NOW() - INTERVAL '30 days'";
-      break;
-  }
-
-  const result = await pool.query(`
-    SELECT COUNT(DISTINCT video_id) as count
-    FROM detection_events 
-    WHERE detection_type = 'person' ${timeCondition}
-  `);
-  return parseInt(result.rows[0].count);
+  const interval = timeRange === '1d' ? '1 day' : timeRange === '30d' ? '30 days' : timeRange === '90d' ? '90 days' : '7 days';
+  try {
+    const result = await pool.query(`
+      SELECT COUNT(DISTINCT sr.result_id) as count
+      FROM search_results sr
+      JOIN searches s ON sr.search_id = s.search_id
+      WHERE s.created_at >= NOW() - INTERVAL '${interval}'
+    `);
+    return parseInt(result.rows[0].count);
+  } catch { return 0; }
 }
 
 async function getSearchesPerformedToday() {
@@ -417,46 +410,41 @@ async function getSearchesPerformedToday() {
 }
 
 async function getToolUsageCount(timeRange) {
-  let timeCondition = '';
-  switch (timeRange) {
-    case '1d':
-      timeCondition = "AND created_at >= NOW() - INTERVAL '1 day'";
-      break;
-    case '7d':
-      timeCondition = "AND created_at >= NOW() - INTERVAL '7 days'";
-      break;
-    case '30d':
-      timeCondition = "AND created_at >= NOW() - INTERVAL '30 days'";
-      break;
-  }
-
+  const interval = timeRange === '1d' ? '1 day' : timeRange === '30d' ? '30 days' : timeRange === '90d' ? '90 days' : '7 days';
   const result = await pool.query(`
     SELECT COUNT(*) as count
     FROM searches 
-    WHERE created_at IS NOT NULL ${timeCondition}
+    WHERE created_at >= NOW() - INTERVAL '${interval}'
   `);
   return parseInt(result.rows[0].count);
 }
 
-async function getDailyUsageTime(timeRange) {
-  // Calculate based on user activity logs
+async function getVideosProcessed(timeRange) {
+  const interval = timeRange === '1d' ? '1 day' : timeRange === '30d' ? '30 days' : timeRange === '90d' ? '90 days' : '7 days';
   const result = await pool.query(`
-    SELECT AVG(EXTRACT(EPOCH FROM (logout_time - login_time)) / 3600) as avg_hours
-    FROM user_sessions 
-    WHERE login_time >= NOW() - INTERVAL '1 day'
-      AND logout_time IS NOT NULL
+    SELECT COUNT(*) as count
+    FROM videos 
+    WHERE status IN ('processed', 'completed')
+      AND upload_time >= NOW() - INTERVAL '${interval}'
   `);
-  return parseFloat(result.rows[0].avg_hours) || 0;
+  return parseInt(result.rows[0].count);
 }
 
-async function getWeeklyUsageTime(timeRange) {
-  const result = await pool.query(`
-    SELECT AVG(EXTRACT(EPOCH FROM (logout_time - login_time)) / 3600) as avg_hours
-    FROM user_sessions 
-    WHERE login_time >= NOW() - INTERVAL '7 days'
-      AND logout_time IS NOT NULL
-  `);
-  return (parseFloat(result.rows[0].avg_hours) || 0) * 7;
+async function getAvgProcessingTime() {
+  try {
+    const result = await pool.query(`
+      SELECT AVG(EXTRACT(EPOCH FROM (s.created_at - v.upload_time))) as avg_seconds
+      FROM videos v
+      JOIN searches s ON s.query_video_id = v.video_id
+      WHERE v.status IN ('processed', 'completed')
+        AND s.created_at > v.upload_time
+        AND v.upload_time >= NOW() - INTERVAL '90 days'
+    `);
+    const avgSec = parseFloat(result.rows[0].avg_seconds) || 0;
+    if (avgSec < 60) return `${Math.round(avgSec)}s`;
+    if (avgSec < 3600) return `${(avgSec / 60).toFixed(1)}m`;
+    return `${(avgSec / 3600).toFixed(1)}h`;
+  } catch { return 'N/A'; }
 }
 
 async function getAvgVideoLength() {
@@ -468,97 +456,130 @@ async function getAvgVideoLength() {
   return parseFloat(result.rows[0].avg_minutes) || 0;
 }
 
-// Helper functions for calculating changes
-async function getDetectionsChange(timeRange) {
-  const current = await getTotalDetectionsToday();
-  const previous = await pool.query(`
-    SELECT COUNT(*) as count
-    FROM detection_events 
-    WHERE DATE(created_at) = CURRENT_DATE - INTERVAL '1 day'
-  `);
-  const prevCount = parseInt(previous.rows[0].count);
-  const change = prevCount > 0 ? ((current - prevCount) / prevCount * 100) : 0;
-  return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% from yesterday`;
+// ─── Chart data helpers ───────────────────────────────────────────────
+
+async function getActivityByHour(timeRange) {
+  const interval = timeRange === '1d' ? '1 day' : timeRange === '30d' ? '30 days' : timeRange === '90d' ? '90 days' : '7 days';
+  try {
+    const result = await pool.query(`
+      SELECT hour, COALESCE(SUM(cnt), 0)::int as detections FROM (
+        SELECT EXTRACT(HOUR FROM created_at)::int as hour, COUNT(*) as cnt
+        FROM searches
+        WHERE created_at >= NOW() - INTERVAL '${interval}'
+        GROUP BY 1
+        UNION ALL
+        SELECT EXTRACT(HOUR FROM upload_time)::int as hour, COUNT(*) as cnt
+        FROM videos
+        WHERE upload_time >= NOW() - INTERVAL '${interval}'
+        GROUP BY 1
+      ) combined
+      GROUP BY hour
+      ORDER BY hour
+    `);
+
+    const hourMap = {};
+    for (let i = 0; i < 24; i += 4) hourMap[i] = 0;
+    result.rows.forEach(r => {
+      const bucket = Math.floor(r.hour / 4) * 4;
+      hourMap[bucket] = (hourMap[bucket] || 0) + r.detections;
+    });
+
+    return Object.entries(hourMap)
+      .sort(([a], [b]) => a - b)
+      .map(([hour, detections]) => ({
+        hour: `${String(hour).padStart(2, '0')}:00`,
+        detections
+      }));
+  } catch {
+    return [
+      { hour: '00:00', detections: 0 }, { hour: '04:00', detections: 0 },
+      { hour: '08:00', detections: 0 }, { hour: '12:00', detections: 0 },
+      { hour: '16:00', detections: 0 }, { hour: '20:00', detections: 0 },
+    ];
+  }
 }
 
-async function getVideosChange(timeRange) {
-  const current = await getVideosUploadedThisWeek();
-  const previous = await pool.query(`
-    SELECT COUNT(*) as count
-    FROM videos 
-    WHERE upload_time >= NOW() - INTERVAL '14 days'
-      AND upload_time < NOW() - INTERVAL '7 days'
-  `);
-  const prevCount = parseInt(previous.rows[0].count);
-  const change = prevCount > 0 ? ((current - prevCount) / prevCount * 100) : 0;
-  return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% from last week`;
+async function getVideoStatusDistribution(timeRange) {
+  const interval = timeRange === '1d' ? '1 day' : timeRange === '30d' ? '30 days' : timeRange === '90d' ? '90 days' : '7 days';
+  try {
+    const result = await pool.query(`
+      SELECT 
+        CASE 
+          WHEN status IN ('processed', 'completed') THEN 'Completed'
+          WHEN status = 'processing' THEN 'Processing'
+          WHEN status = 'uploaded' THEN 'Uploaded'
+          WHEN status = 'error' THEN 'Error'
+          ELSE INITCAP(status)
+        END as name,
+        COUNT(*) as value
+      FROM videos
+      WHERE upload_time >= NOW() - INTERVAL '${interval}'
+      GROUP BY name
+      ORDER BY value DESC
+    `);
+    if (result.rows.length === 0) return [{ name: 'No Data', value: 1 }];
+    return result.rows.map(r => ({ name: r.name, value: parseInt(r.value) }));
+  } catch { return [{ name: 'No Data', value: 1 }]; }
+}
+
+// ─── Change calculation helpers ───────────────────────────────────────
+
+async function getDetectionsChange() {
+  try {
+    const todayRes = await pool.query(`SELECT COUNT(*) as c FROM search_results WHERE DATE(created_at) = CURRENT_DATE`);
+    const yesterdayRes = await pool.query(`SELECT COUNT(*) as c FROM search_results WHERE DATE(created_at) = CURRENT_DATE - 1`);
+    const today = parseInt(todayRes.rows[0].c); const yesterday = parseInt(yesterdayRes.rows[0].c);
+    const change = yesterday > 0 ? ((today - yesterday) / yesterday * 100) : 0;
+    return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% from yesterday`;
+  } catch { return '+0% from yesterday'; }
+}
+
+async function getVideosChange() {
+  try {
+    const cur = await pool.query(`SELECT COUNT(*) as c FROM videos WHERE upload_time >= NOW() - INTERVAL '7 days'`);
+    const prev = await pool.query(`SELECT COUNT(*) as c FROM videos WHERE upload_time >= NOW() - INTERVAL '14 days' AND upload_time < NOW() - INTERVAL '7 days'`);
+    const change = parseInt(prev.rows[0].c) > 0 ? ((parseInt(cur.rows[0].c) - parseInt(prev.rows[0].c)) / parseInt(prev.rows[0].c) * 100) : 0;
+    return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% from last week`;
+  } catch { return '+0% from last week'; }
 }
 
 async function getPersonsChange(timeRange) {
-  const current = await getUniquePersonsDetected(timeRange);
-  const previous = await pool.query(`
-    SELECT COUNT(DISTINCT video_id) as count
-    FROM detection_events 
-    WHERE detection_type = 'person' 
-      AND created_at >= NOW() - INTERVAL '14 days'
-      AND created_at < NOW() - INTERVAL '7 days'
-  `);
-  const prevCount = parseInt(previous.rows[0].count);
-  const change = prevCount > 0 ? ((current - prevCount) / prevCount * 100) : 0;
-  return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% this week`;
+  const interval = timeRange === '1d' ? '1 day' : timeRange === '30d' ? '30 days' : '7 days';
+  try {
+    const cur = await pool.query(`SELECT COUNT(DISTINCT sr.result_id) as c FROM search_results sr JOIN searches s ON sr.search_id = s.search_id WHERE s.created_at >= NOW() - INTERVAL '${interval}'`);
+    const prev = await pool.query(`SELECT COUNT(DISTINCT sr.result_id) as c FROM search_results sr JOIN searches s ON sr.search_id = s.search_id WHERE s.created_at >= NOW() - INTERVAL '${interval}' * 2 AND s.created_at < NOW() - INTERVAL '${interval}'`);
+    const change = parseInt(prev.rows[0].c) > 0 ? ((parseInt(cur.rows[0].c) - parseInt(prev.rows[0].c)) / parseInt(prev.rows[0].c) * 100) : 0;
+    return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% this period`;
+  } catch { return '+0% this period'; }
 }
 
-async function getSearchesChange(timeRange) {
-  const current = await getSearchesPerformedToday();
-  const previous = await pool.query(`
-    SELECT COUNT(*) as count
-    FROM searches 
-    WHERE DATE(created_at) = CURRENT_DATE - INTERVAL '1 day'
-  `);
-  const prevCount = parseInt(previous.rows[0].count);
-  const change = prevCount > 0 ? ((current - prevCount) / prevCount * 100) : 0;
-  return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% from yesterday`;
+async function getSearchesChange() {
+  try {
+    const todayRes = await pool.query(`SELECT COUNT(*) as c FROM searches WHERE DATE(created_at) = CURRENT_DATE`);
+    const yesterdayRes = await pool.query(`SELECT COUNT(*) as c FROM searches WHERE DATE(created_at) = CURRENT_DATE - 1`);
+    const change = parseInt(yesterdayRes.rows[0].c) > 0 ? ((parseInt(todayRes.rows[0].c) - parseInt(yesterdayRes.rows[0].c)) / parseInt(yesterdayRes.rows[0].c) * 100) : 0;
+    return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% from yesterday`;
+  } catch { return '+0% from yesterday'; }
 }
 
 async function getToolUsageChange(timeRange) {
-  const current = await getToolUsageCount(timeRange);
-  const previous = await pool.query(`
-    SELECT COUNT(*) as count
-    FROM searches 
-    WHERE created_at >= NOW() - INTERVAL '60 days'
-      AND created_at < NOW() - INTERVAL '30 days'
-  `);
-  const prevCount = parseInt(previous.rows[0].count);
-  const change = prevCount > 0 ? ((current - prevCount) / prevCount * 100) : 0;
-  return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% this month`;
+  const interval = timeRange === '1d' ? '1 day' : timeRange === '30d' ? '30 days' : '7 days';
+  try {
+    const cur = await pool.query(`SELECT COUNT(*) as c FROM searches WHERE created_at >= NOW() - INTERVAL '${interval}'`);
+    const prev = await pool.query(`SELECT COUNT(*) as c FROM searches WHERE created_at >= NOW() - INTERVAL '${interval}' * 2 AND created_at < NOW() - INTERVAL '${interval}'`);
+    const change = parseInt(prev.rows[0].c) > 0 ? ((parseInt(cur.rows[0].c) - parseInt(prev.rows[0].c)) / parseInt(prev.rows[0].c) * 100) : 0;
+    return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% from previous period`;
+  } catch { return '+0% from previous period'; }
 }
 
-async function getDailyTimeChange(timeRange) {
-  const current = await getDailyUsageTime(timeRange);
-  const previous = await pool.query(`
-    SELECT AVG(EXTRACT(EPOCH FROM (logout_time - login_time)) / 3600) as avg_hours
-    FROM user_sessions 
-    WHERE login_time >= NOW() - INTERVAL '2 days'
-      AND login_time < NOW() - INTERVAL '1 day'
-      AND logout_time IS NOT NULL
-  `);
-  const prevHours = parseFloat(previous.rows[0].avg_hours) || 0;
-  const change = prevHours > 0 ? ((current - prevHours) / prevHours * 100) : 0;
-  return `${change >= 0 ? '+' : ''}${change.toFixed(0)} min from yesterday`;
-}
-
-async function getWeeklyTimeChange(timeRange) {
-  const current = await getWeeklyUsageTime(timeRange);
-  const previous = await pool.query(`
-    SELECT AVG(EXTRACT(EPOCH FROM (logout_time - login_time)) / 3600) as avg_hours
-    FROM user_sessions 
-    WHERE login_time >= NOW() - INTERVAL '14 days'
-      AND login_time < NOW() - INTERVAL '7 days'
-      AND logout_time IS NOT NULL
-  `);
-  const prevHours = (parseFloat(previous.rows[0].avg_hours) || 0) * 7;
-  const change = prevHours > 0 ? ((current - prevHours) / prevHours * 100) : 0;
-  return `${change >= 0 ? '+' : ''}${change.toFixed(1)}h from last week`;
+async function getProcessedChange(timeRange) {
+  const interval = timeRange === '1d' ? '1 day' : timeRange === '30d' ? '30 days' : '7 days';
+  try {
+    const cur = await pool.query(`SELECT COUNT(*) as c FROM videos WHERE status IN ('processed','completed') AND upload_time >= NOW() - INTERVAL '${interval}'`);
+    const prev = await pool.query(`SELECT COUNT(*) as c FROM videos WHERE status IN ('processed','completed') AND upload_time >= NOW() - INTERVAL '${interval}' * 2 AND upload_time < NOW() - INTERVAL '${interval}'`);
+    const change = parseInt(prev.rows[0].c) > 0 ? ((parseInt(cur.rows[0].c) - parseInt(prev.rows[0].c)) / parseInt(prev.rows[0].c) * 100) : 0;
+    return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% from previous period`;
+  } catch { return '+0% from previous period'; }
 }
 
 async function getComprehensiveAnalytics(timeRange, userId) {
@@ -572,19 +593,19 @@ async function getComprehensiveAnalytics(timeRange, userId) {
       uniquePersonsDetected,
       searchesPerformedToday,
       toolUsageCount,
-      dailyUsageTime,
-      weeklyUsageTime,
+      videosProcessed,
+      avgProcessingTime,
       avgVideoLength
     ] = await Promise.all([
-      DetectionEvent.getDetectionsByHour(timeRange),
-      DetectionEvent.getObjectTypes(timeRange),
+      getActivityByHour(timeRange),
+      getVideoStatusDistribution(timeRange),
       getTotalDetectionsToday(),
       getVideosUploadedThisWeek(),
       getUniquePersonsDetected(timeRange),
       getSearchesPerformedToday(),
       getToolUsageCount(timeRange),
-      getDailyUsageTime(timeRange),
-      getWeeklyUsageTime(timeRange),
+      getVideosProcessed(timeRange),
+      getAvgProcessingTime(),
       getAvgVideoLength()
     ]);
 
@@ -638,19 +659,19 @@ async function getComprehensiveAnalytics(timeRange, userId) {
             icon: "Search"
           },
           {
-            title: "Tool Usage Count",
+            title: "Total Searches",
             value: toolUsageCount.toLocaleString(),
             icon: "FileText"
           },
           {
-            title: "Daily Usage Time",
-            value: `${dailyUsageTime.toFixed(1)}h`,
-            icon: "Clock"
+            title: "Videos Processed",
+            value: videosProcessed.toString(),
+            icon: "CheckCircle"
           },
           {
-            title: "Weekly Usage Time",
-            value: `${weeklyUsageTime.toFixed(1)}h`,
-            icon: "Calendar"
+            title: "Avg Processing Time",
+            value: avgProcessingTime,
+            icon: "Clock"
           },
           {
             title: "Avg Video Length",

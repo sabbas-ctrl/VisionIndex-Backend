@@ -911,4 +911,110 @@ export class VideoController {
       });
     }
   }
+
+  // Cancel video processing
+  static async cancelVideoProcessing(req, res) {
+    try {
+      const { videoId } = req.params;
+      const userId = req.user.user_id;
+
+      // Verify ownership
+      const video = await Video.findById(videoId);
+      if (!video) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+
+      if (video.uploader_id !== userId && req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+        return res.status(403).json({ success: false, message: 'Unauthorized to cancel this video' });
+      }
+
+      // Update status to 'failed' (or cancelled)
+      await Video.updateStatus(videoId, 'failed');
+
+      // Attempt to terminate Temporal workflow if it's running
+      try {
+        const { getTemporalClient } = await import('../utils/temporalClient.js');
+        const client = getTemporalClient();
+        if (client) {
+          const handle = client.workflow.getHandle(`video-processing-${videoId}`);
+          await handle.terminate('User cancelled processing');
+        }
+      } catch (err) {
+        // Ignore temporal errors here since workflow might not exist or temporal is down
+        console.log(`Note: Could not terminate Temporal workflow for video ${videoId}:`, err.message);
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Video processing cancelled successfully'
+      });
+    } catch (error) {
+      console.error('Error cancelling video processing:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to cancel processing',
+        error: error.message
+      });
+    }
+  }
+
+  // Get active queue videos for dashboard (excluding dismissed ones)
+  static async getQueueVideos(req, res) {
+    try {
+      const userId = req.user.user_id;
+      // Get videos that are either NOT completed, or are completed but NOT viewed
+      const query = `
+        SELECT * FROM public.videos 
+        WHERE uploader_id = $1 
+        AND (status IN ('processing', 'uploaded', 'error', 'failed') 
+             OR (status = 'completed' AND is_viewed = false))
+        ORDER BY 
+          CASE status
+            WHEN 'processing' THEN 1
+            WHEN 'uploaded' THEN 2
+            WHEN 'error' THEN 3
+            WHEN 'failed' THEN 3
+            ELSE 4
+          END,
+          upload_time DESC
+        LIMIT 50
+      `;
+      const result = await pool.query(query, [userId]);
+      
+      res.json({
+        success: true,
+        data: {
+          videos: result.rows
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching queue videos:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch queue videos', error: error.message });
+    }
+  }
+
+  // Dismiss a video from the queue (mark as viewed)
+  static async dismissQueueVideo(req, res) {
+    try {
+      const { videoId } = req.params;
+      const userId = req.user.user_id;
+      
+      const query = `
+        UPDATE public.videos 
+        SET is_viewed = true, updated_at = CURRENT_TIMESTAMP
+        WHERE video_id = $1 AND uploader_id = $2
+        RETURNING *
+      `;
+      const result = await pool.query(query, [videoId, userId]);
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Video not found or unauthorized' });
+      }
+
+      res.json({ success: true, message: 'Video dismissed from queue' });
+    } catch (error) {
+      console.error('Error dismissing video:', error);
+      res.status(500).json({ success: false, message: 'Failed to dismiss video', error: error.message });
+    }
+  }
 }
