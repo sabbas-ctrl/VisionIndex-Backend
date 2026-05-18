@@ -37,6 +37,23 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' });
 });
 
+// ─── Global error handler ─────────────────────────────────────────────
+// Catches unhandled errors from route handlers and sanitizes before sending
+app.use((err, req, res, _next) => {
+  console.error(`[ERROR] ${req.method} ${req.originalUrl}:`, err.message);
+
+  const status = err.status || err.statusCode || 500;
+  const raw = err.message || '';
+
+  // Strip technical / SQL / stack-trace noise from client-facing response
+  const isTechnical = /relation|column|syntax|ECONNREFUSED|ETIMEDOUT|duplicate key|violates|constraint|stack|at\s+\w+\s*\(/i.test(raw);
+  const message = (!isTechnical && raw.length > 0 && raw.length < 120)
+    ? raw
+    : 'Internal server error';
+
+  res.status(status).json({ success: false, error: message });
+});
+
 const port = process.env.PORT || 3000;
 app.listen(port, async () => {
   console.log(`Server is running on port ${port}`);

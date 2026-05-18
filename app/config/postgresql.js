@@ -22,7 +22,9 @@ export const pool = new Pool({
 export const connectDB = async () => {
   try {
     const client = await pool.connect();
-    console.log('✅ PostgreSQL connected');
+    // Run automatic migrations for production/Docker environments
+    await client.query('ALTER TABLE videos ADD COLUMN IF NOT EXISTS is_viewed BOOLEAN DEFAULT FALSE;');
+    console.log('✅ PostgreSQL connected & migrations verified');
     client.release();
   } catch (err) {
     console.error('❌ DB connection error:', err.message);
