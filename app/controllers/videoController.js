@@ -966,8 +966,8 @@ export class VideoController {
       const query = `
         SELECT * FROM public.videos 
         WHERE uploader_id = $1 
-        AND (status IN ('processing', 'uploaded', 'error', 'failed') 
-             OR (status = 'completed' AND is_viewed = false))
+        AND (status IN ('processing', 'uploaded') 
+             OR (status IN ('completed', 'error', 'failed') AND is_viewed = false))
         ORDER BY 
           CASE status
             WHEN 'processing' THEN 1
