@@ -251,7 +251,7 @@ export class SearchController {
           },
           objectCarried: primaryMetadata.object_carried || primaryMetadata.attributes?.carried_objects?.[0]?.type || 'None',
           gender: {
-            type: primaryMetadata.attributes?.gender?.type || 'Unknown',
+            type: primaryMetadata.person_gender || primaryMetadata.attributes?.gender?.type || 'Unknown',
             confidence: primaryMetadata.attributes?.gender?.confidence 
               ? `${(primaryMetadata.attributes.gender.confidence * 100).toFixed(1)}% Conf.`
               : 'N/A'
@@ -311,10 +311,13 @@ export class SearchController {
               start_time: metadata.start_time,
               end_time: metadata.end_time,
               num_frames: metadata.num_frames,
+              person_gender: metadata.person_gender,
               upper_color: metadata.upper_color,
               lower_color: metadata.lower_color,
               attributes: metadata.attributes,
               object_carried: metadata.object_carried,
+              has_reappearance: metadata.has_reappearance,
+              reappearances: metadata.reappearances,
               similarity_score: metadata.similarity_score
             }
           };
@@ -398,7 +401,12 @@ export class SearchController {
                 confidence: payload.avg_confidence 
                   ? `${(payload.avg_confidence * 100).toFixed(1)}%`
                   : 'N/A',
-                verified: payload.verified || false
+                verified: payload.verified || false,
+                gender: payload.person_gender || payload.attributes?.gender?.type || 'Unknown',
+                hasReappearance: payload.has_reappearance || false,
+                totalAppearances: payload.total_appearances || 1,
+                reappearances: payload.reappearances || [],
+                mergedTrackIds: payload.merged_track_ids || []
               });
             });
           }
