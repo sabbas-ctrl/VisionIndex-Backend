@@ -184,7 +184,7 @@ export class SearchController {
               gender: { type: 'N/A', confidence: 'N/A' },
               embeddingConfidence: 'N/A'
             },
-            timeline: { markers: [] },
+            timeline: { segments: [] },
             appearances: { first: 'N/A', last: 'N/A', total: 0, numFrames: 0, confidence: 'N/A' },
             aiInsights: {
               behavioral: 'No matching subjects were detected in the video.',
@@ -219,6 +219,13 @@ export class SearchController {
       const confidence = primaryMetadata.similarity_score || primaryMetadata.avg_confidence || parseFloat(primaryResult.score) || 0;
       const startTime = primaryMetadata.start_time || primaryMetadata.first_appearance_time || primaryResult.video_timestamp || '0:00';
       const endTime = primaryMetadata.end_time || primaryMetadata.last_appearance_time || startTime;
+      
+      let finalEndTime = primaryMetadata.last_appearance_time || endTime;
+      if (primaryMetadata.reappearances && primaryMetadata.reappearances.length > 0) {
+        const lastReapp = primaryMetadata.reappearances[primaryMetadata.reappearances.length - 1];
+        finalEndTime = lastReapp.end_time || lastReapp.endTime || finalEndTime;
+      }
+      
       const numFrames = primaryMetadata.num_frames || primaryMetadata.appearance_count || 1;
 
       // Fetch video record for metadata (duration, resolution, format)
@@ -246,7 +253,10 @@ export class SearchController {
             type: primaryMetadata.attributes?.upper_clothing?.type || 'Unknown'
           },
           lowerClothing: {
-            color: primaryMetadata.lower_color || primaryMetadata.attributes?.lower_clothing?.color || 'Unknown',
+            color: (() => {
+              const color = primaryMetadata.lower_color || primaryMetadata.attributes?.lower_clothing?.color;
+              return (!color || color === 'Unknown') ? 'Not visible' : color;
+            })(),
             type: primaryMetadata.attributes?.lower_clothing?.type || 'Unknown'
           },
           objectCarried: primaryMetadata.object_carried || primaryMetadata.attributes?.carried_objects?.[0]?.type || 'None',
@@ -259,36 +269,46 @@ export class SearchController {
           embeddingConfidence: `${(confidence * 100).toFixed(1)}%`
         },
         timeline: {
-          // Always include the first appearance, then add any reappearances
-          markers: (() => {
-            const markers = [];
-            // First appearance
-            markers.push({
-              time: startTime,
-              position: 10 // Position at 10% from left
+          // Build segments: each has a start (arrival) and end (departure) marker
+          segments: (() => {
+            const segments = [];
+            const totalSegments = 1 + (primaryMetadata.reappearances?.length || 0);
+            const segmentWidth = 80 / totalSegments; // distribute across 10%–90%
+
+            // First appearance segment
+            segments.push({
+              startTime: startTime,
+              endTime: endTime,
+              startPosition: 10,
+              endPosition: 10 + segmentWidth * 0.8
             });
-            // Add reappearances if any
+
+            // Reappearance segments
             if (primaryMetadata.reappearances && primaryMetadata.reappearances.length > 0) {
               primaryMetadata.reappearances.forEach((reapp, index) => {
-                markers.push({
-                  time: reapp.start_time,
-                  position: 10 + ((index + 1) * 80) / (primaryMetadata.reappearances.length + 1)
+                const basePos = 10 + (index + 1) * segmentWidth;
+                segments.push({
+                  startTime: reapp.start_time || 'N/A',
+                  endTime: reapp.end_time || 'N/A',
+                  startPosition: basePos,
+                  endPosition: basePos + segmentWidth * 0.8
                 });
               });
             }
-            return markers;
+            return segments;
           })()
+        
         },
         appearances: {
           first: startTime,
-          last: endTime,
+          last: finalEndTime,
           total: primaryMetadata.total_appearances || (primaryMetadata.reappearances?.length || 0) + 1, // Number of times person appeared (reappearances + 1)
           numFrames: numFrames, // Total frames detected
           confidence: `${(confidence * 100).toFixed(1)}%`
         },
         aiInsights: {
           behavioral: `Subject detected across ${primaryMetadata.total_appearances || numFrames} different time segments.`,
-          movement: `First detected at ${startTime}, last seen at ${endTime}.`,
+          movement: `First detected at ${startTime}, last seen at ${finalEndTime}.`,
           observations: `Match confidence: ${(confidence * 100).toFixed(1)}%. Total frames: ${numFrames}.`
         },
         additionalMatches: results.slice(1, 4).map((result, index) => {
